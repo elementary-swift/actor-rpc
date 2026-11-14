@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Treasure hunt distributed actor hosted on an API Gateway HTTP API.
+
+Globals:
+  HttpApi:
+    CorsConfiguration:
+      AllowOrigins:
+        - "*"
+      AllowHeaders:
+        - content-type
+      AllowMethods:
+        - POST
+        - OPTIONS
+
+Resources:
+  TreasureHuntFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: elementary-treasure-hunt
+      CodeUri: .build/plugins/AWSLambdaBuilder/outputs/AWSLambdaBuilder/Lambda/Lambda.zip
+      Handler: swift.bootstrap
+      Runtime: provided.al2023
+      Architectures:
+        - arm64
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          LOG_LEVEL: info
+      Events:
+        Rpc:
+          Type: HttpApi
+          Properties:
+            Path: /rpc/{proxy+}
+            Method: POST
+            PayloadFormatVersion: "2.0"
+
+Outputs:
+  HttpApiUrl:
+    Description: Transport base. Set __RPC_ENDPOINT__ in index.html to it.
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/rpc"

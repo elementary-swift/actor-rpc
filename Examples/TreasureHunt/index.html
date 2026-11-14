@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Treasure hunt — Swift distributed actors</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A treasure hunt in ElementaryUI, where only a Swift distributed actor on AWS Lambda knows where the treasure lies."
+    />
+    <meta name="theme-color" content="#2563eb" />
+  </head>
+  <body>
+    <script>
+      // Transport base. Locally `/rpc`; after deploy, the stack's HttpApiUrl.
+      // Vite's LAMBDA_PROXY_MODE (direct | sam) forwards the full path.
+      globalThis.__RPC_ENDPOINT__ = "/rpc";
+    </script>
+    <script type="module">
+      import "ElementaryFlow";
+      import { init } from "virtual:swift-wasm?js&product=WebApp";
+      await init();
+    </script>
+  </body>
+</html>

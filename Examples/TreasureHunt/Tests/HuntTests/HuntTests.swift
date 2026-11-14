@@ -1,0 +1,73 @@
+import Distributed
+@testable import Lambda
+import Shared
+import SwiftRPC
+import Testing
+
+/// A client talking to a fresh server, as after a cold start.
+private func hunt() -> any TreasureHunt {
+    let server = RPCServer()
+    server.serve(TreasureHuntActor.init)
+    return RPCClient(transport: server).resolve($TreasureHunt.self)
+}
+
+/// Finds the treasure the way a player would, from the distances alone.
+private func dig(_ game: Game, with hunt: any TreasureHunt) async throws -> Cell {
+    for row in 0..<Cell.size {
+        for column in 0..<Cell.size {
+            let cell = Cell(row: row, column: column)
+            if try await hunt.probe(cell, in: game) == .found { return cell }
+        }
+    }
+    Issue.record("No treasure on the map.")
+    return Cell(row: -1, column: -1)
+}
+
+@Test func newGameHasAFunName() async throws {
+    let game = try await hunt().newGame()
+    let words = game.name.split(separator: " ")
+    #expect(words.count == 2)
+    #expect(words.allSatisfy { $0.first?.isUppercase == true })
+}
+
+@Test func distanceCountsStepsToTheTreasure() async throws {
+    let hunt = hunt()
+    let game = Game(name: "Sleepy Badger")
+    let treasure = try await dig(game, with: hunt)
+    let steps = treasure.row + treasure.column
+    #expect(try await hunt.probe(Cell(row: 0, column: 0), in: game) == (steps == 0 ? .found : .away(steps: steps)))
+}
+
+@Test func nameAloneDecidesTheTreasure() async throws {
+    let game = Game(name: "Cosmic Teapot")
+    #expect(try await hunt().reveal(game) == (try await hunt().reveal(game)))
+}
+
+@Test func gamesHideTheirTreasuresApart() async throws {
+    let names = ["Silly Snake", "Grumpy Comet", "Tiny Wizard", "Velvet Moon"]
+    var spots: Set<Cell> = []
+    for name in names {
+        spots.insert(try await hunt().reveal(Game(name: name)))
+    }
+    #expect(spots.count > 1)
+}
+
+@Test func revealShowsWhereDiggingFindsIt() async throws {
+    let hunt = hunt()
+    let game = try await hunt.newGame()
+    #expect(try await hunt.reveal(game) == (try await dig(game, with: hunt)))
+}
+
+@Test func squareOffTheMapIsRejected() async throws {
+    let error = await #expect(throws: RPCError.self) {
+        try await hunt().probe(Cell(row: Cell.size, column: 0), in: Game(name: "Rusty Compass"))
+    }
+    #expect(error == RPCError(.failedPrecondition, "That square is off the map."))
+}
+
+@Test func gameWithoutANameIsRejected() async throws {
+    let error = await #expect(throws: RPCError.self) {
+        try await hunt().reveal(Game(name: ""))
+    }
+    #expect(error == RPCError(.failedPrecondition, "The game has no name."))
+}

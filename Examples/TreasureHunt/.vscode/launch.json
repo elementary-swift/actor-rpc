@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:TreasureHunt}",
+            "name": "Debug WebApp",
+            "target": "WebApp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug WebApp"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:TreasureHunt}",
+            "name": "Release WebApp",
+            "target": "WebApp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release WebApp"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:TreasureHunt}",
+            "name": "Debug Lambda",
+            "target": "Lambda",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug Lambda"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:TreasureHunt}",
+            "name": "Release Lambda",
+            "target": "Lambda",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release Lambda"
+        }
+    ]
+}
