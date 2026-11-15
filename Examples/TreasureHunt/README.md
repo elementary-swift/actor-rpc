@@ -18,7 +18,7 @@ Through SAM:
 ```sh
 swift package lambda-build --allow-network-connections docker --base-docker-image swift:amazonlinux2023
 npm run api
-LAMBDA_PROXY_MODE=sam npm run dev
+npm run dev:sam
 ```
 
 ## Deploy
@@ -28,4 +28,4 @@ swift package lambda-build --allow-network-connections docker --base-docker-imag
 sam deploy --guided --template-file template.yaml
 ```
 
-Set `__RPC_ENDPOINT__` in `index.html` to the stack's `HttpApiUrl`, then `npm run build`.
+Set `__RPC_ORIGIN__` in `index.html` to the stack's `ApiOrigin`, then `npm run build`.

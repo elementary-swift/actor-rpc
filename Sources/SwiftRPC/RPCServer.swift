@@ -1,13 +1,12 @@
 #if !hasFeature(Embedded)
 
 public import Distributed
-import Synchronization
 
 /// Hosts services and answers calls to them. Plug ``respond(to:body:basePath:)`` into any HTTP server.
 ///
 /// ```swift
-/// let server = RPCServer()
-/// server.serve(GreeterActor.init)
+/// var server = RPCServer()
+/// server.serve(perCall: GreeterActor.init)
 ///
 /// // In the HTTP handler for POST /rpc/*:
 /// let (response, body) = await server.respond(to: request, body: body, basePath: "/rpc")
@@ -18,7 +17,13 @@ import Synchronization
 ///
 /// It is a transport too: `RPCClient(transport: server)` calls its actors in-process.
 public struct RPCServer: RPCTransport {
-    let system = RPCActorSystem(transport: nil)
+    private enum Service {
+        case perCall(@Sendable (RPCActorSystem) -> any DistributedActor)
+        case shared(any DistributedActor)
+    }
+
+    private let system = RPCActorSystem(transport: nil)
+    private var services: [RPCActorID: Service] = [:]
     private let onError: @Sendable (any Error) -> Void
 
     /// - Parameter onError: Sees every error that a call hides from its caller as a bare `500`.
@@ -26,22 +31,37 @@ public struct RPCServer: RPCTransport {
         self.onError = onError
     }
 
-    /// Serves `Service.rpcPath` with a new actor for each call, which lives as long as the call.
-    public func serve<Service: RPCService>(_ make: @escaping @Sendable (RPCActorSystem) -> Service) {
-        system.registry.withLock { $0.factories[RPCActorID(rpcPath: Service.rpcPath)] = make }
+    /// Serves `S.rpcPath` with a new actor for each call, which lives as long as the call.
+    ///
+    /// Calls run concurrently. The actors all have the same ID, the service's path, which is fine
+    /// because nothing looks them up by it.
+    public mutating func serve<S: RPCService>(perCall make: @escaping @Sendable (RPCActorSystem) -> S) {
+        register(S.self, .perCall(make))
     }
 
-    /// Serves `Service.rpcPath` with one actor for the life of the server, for state shared between calls.
-    public func serve<Service: RPCService>(shared make: (RPCActorSystem) -> Service) {
-        let id = RPCActorID(rpcPath: Service.rpcPath)
-        let actor = RPCActorSystem.$pendingID.withValue(id) { make(system) }
-        system.registry.withLock { $0.shared[id] = actor }
+    /// Serves `S.rpcPath` with one actor for the life of the server, for state shared between calls.
+    ///
+    /// Calls run one at a time, as the actor isolates them.
+    public mutating func serve<S: RPCService>(shared make: (RPCActorSystem) -> S) {
+        let actor = RPCActorSystem.$pendingID.withValue(S.actorID) { make(system) }
+        register(S.self, .shared(actor))
+    }
+
+    private mutating func register<S: RPCService>(_: S.Type, _ service: Service) {
+        precondition(services[S.actorID] == nil, "\(S.actorID) is served twice.")
+        services[S.actorID] = service
     }
 
     /// Runs a call and returns its result as JSON, or no bytes for `Void`.
     public func send(_ call: consuming RPCCall) async throws(RPCError) -> [UInt8] {
-        guard let actor = system.localActor(call.actor) else {
-            throw .unknownActor(call.actor)
+        let actor: any DistributedActor
+        switch services[call.actorID] {
+        case .perCall(let make):
+            actor = RPCActorSystem.$pendingID.withValue(call.actorID) { make(system) }
+        case .shared(let shared):
+            actor = shared
+        case nil:
+            throw .unknownActor(call.actorID)
         }
         return try await perform(call, on: actor).get()
     }
@@ -59,8 +79,6 @@ public struct RPCServer: RPCTransport {
                 invocationDecoder: &decoder,
                 handler: handler
             )
-        } catch let error as ExecuteDistributedTargetError {
-            return .failure(RPCError(.invalidArgument, error.message))
         } catch {
             handler.fail(with: error)
         }
@@ -68,19 +86,8 @@ public struct RPCServer: RPCTransport {
     }
 }
 
-struct ActorRegistry {
-    var factories: [RPCActorID: @Sendable (RPCActorSystem) -> any DistributedActor] = [:]
-    var shared: [RPCActorID: any DistributedActor] = [:]
-}
-
-extension RPCActorSystem {
-    /// The ID `assignID` hands to the actor being created.
-    @TaskLocal static var pendingID: RPCActorID?
-
-    func localActor(_ id: RPCActorID) -> (any DistributedActor)? {
-        let (shared, factory) = registry.withLock { ($0.shared[id], $0.factories[id]) }
-        return shared ?? factory.map { make in Self.$pendingID.withValue(id) { make(self) } }
-    }
+extension RPCService {
+    fileprivate static var actorID: RPCActorID { RPCActorID(rpcPath: rpcPath) }
 }
 
 #endif

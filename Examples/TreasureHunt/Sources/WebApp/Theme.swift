@@ -9,7 +9,6 @@ enum Theme {
     static let line: CSSColor = "#e4e7ec"
     static let squareFill: CSSColor = "#f8fafc"
     static let squareLine: CSSColor = "#d0d5dd"
-    static let squareHoverFill: CSSColor = "#eff4ff"
     static let squareHoverLine: CSSColor = "#84adff"
     static let gold: CSSColor = "#facc15"
 
@@ -75,7 +74,7 @@ enum Theme {
         .width(356)
     ]
 
-    static let site: [ElementaryStyle] = [
+    static let square: [ElementaryStyle] = [
         .width(32),
         .height(32),
         .padding(0),
@@ -90,11 +89,11 @@ enum Theme {
         .cursor(.pointer),
     ]
 
-    static let siteHover: [ElementaryStyle] = [
+    static let squareHover: [ElementaryStyle] = [
         .borderColor(squareHoverLine)
     ]
 
-    static let siteDisabled: [ElementaryStyle] = [
+    static let squareDisabled: [ElementaryStyle] = [
         .borderColor(squareLine),
         .cursor(.default),
     ]

@@ -1,13 +1,14 @@
 import Distributed
-@testable import Lambda
 import Shared
 import SwiftRPC
 import Testing
 
+@testable import Lambda
+
 /// A client talking to a fresh server, as after a cold start.
 private func hunt() -> any TreasureHunt {
-    let server = RPCServer()
-    server.serve(TreasureHuntActor.init)
+    var server = RPCServer()
+    server.serve(perCall: TreasureHuntActor.init)
     return RPCClient(transport: server).resolve($TreasureHunt.self)
 }
 

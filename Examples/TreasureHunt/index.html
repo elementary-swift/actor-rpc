@@ -12,9 +12,8 @@
   </head>
   <body>
     <script>
-      // Transport base. Locally `/rpc`; after deploy, the stack's HttpApiUrl.
-      // Vite's LAMBDA_PROXY_MODE (direct | sam) forwards the full path.
-      globalThis.__RPC_ENDPOINT__ = "/rpc";
+      // Empty calls the page's own origin, where Vite forwards /rpc. After deploy, the stack's ApiOrigin.
+      globalThis.__RPC_ORIGIN__ = "";
     </script>
     <script type="module">
       import "ElementaryFlow";

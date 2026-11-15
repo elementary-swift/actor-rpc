@@ -4,10 +4,6 @@ Swift `distributed actor` calls over HTTP.
 
 Requires Swift 6.5 and the `experimental/new-codable` branch of swift-foundation.
 
-```swift
-.package(url: "https://github.com/elementary-swift/swift-rpc.git", branch: "main"),
-```
-
 ## Usage
 
 Shared:
@@ -30,36 +26,29 @@ distributed actor GreeterActor: Greeter {
     distributed func greet(name: String) -> String { "Hello, \(name)!" }
 }
 
-let server = RPCServer()
-server.serve(GreeterActor.init)
+var server = RPCServer()
+server.serve(perCall: GreeterActor.init)
 
+// In the HTTP handler for POST /rpc/*:
 let (response, responseBody) = await server.respond(to: request, body: body, basePath: "/rpc")
 ```
 
-Client:
+Client, with any `HTTPExecutor`, e.g. `FetchExecutor` from `SwiftRPCFetch` in the browser:
 
 ```swift
-let transport = HTTPTransport(client: MyHTTPClient(), options: .init(basePath: "/rpc"))
+let transport = HTTPTransport(executor: FetchExecutor(), options: .init(basePath: "/rpc"))
 let greeter = RPCClient(transport: transport).resolve($Greeter.self)
-try await greeter.greet(name: "Ada")
-```
-
-Browser (`SwiftRPCFetch`):
-
-```swift
-HTTPTransport(client: FetchClient(baseURL: "https://api.example.com/rpc"))
+let greeting = try await greeter.greet(name: "Ada")
 ```
 
 ## Wire format
 
 | | |
 | --- | --- |
-| Request | `POST <basePath>/<rpcPath>/<target>`, body: JSON array of arguments |
+| Request | `POST <basePath>/<rpcPath>/<target>`, body: JSON array of the arguments |
 | Success | `200` with the result as JSON, `204` for `Void` |
-| Failure | status of the `RPCError.Code`, body: message as JSON string |
+| Failure | the status of the `RPCError.Code`, body: the message as a JSON string |
 
-`<target>` is the mangled function name; client and server must be built with the same toolchain.
+`<target>` is the method's mangled name, so client and server must be built from the same protocol.
 
-Errors not conforming to `RPCErrorConvertible` are sent as `500 "Internal error."`.
-
-Embedded Swift: client only.
+See [Examples/TreasureHunt](Examples/TreasureHunt) for a browser app calling an actor on AWS Lambda.

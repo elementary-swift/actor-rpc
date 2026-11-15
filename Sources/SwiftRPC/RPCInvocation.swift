@@ -9,6 +9,8 @@ public struct RPCInvocationEncoder: DistributedTargetInvocationEncoder {
 
     init() {}
 
+    /// A call through a `@Resolvable` stub records the stub's type, which the server replaces with
+    /// the served actor's. Generic distributed methods aren't supported.
     public mutating func recordGenericSubstitution<T>(_ type: T.Type) throws {}
 
     public mutating func recordArgument<Value: JSONCodable>(
@@ -26,7 +28,7 @@ public struct RPCInvocationEncoder: DistributedTargetInvocationEncoder {
 
     public mutating func doneRecording() throws {}
 
-    mutating func makeCall(actor: RPCActorID, target: RemoteCallTarget) -> RPCCall {
+    mutating func makeCall(actorID: RPCActorID, target: RemoteCallTarget) -> RPCCall {
         #if hasFeature(Embedded)
         let name = target.identifier.withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
         #else
@@ -36,7 +38,7 @@ public struct RPCInvocationEncoder: DistributedTargetInvocationEncoder {
         // Hands the buffer over, so the call holds the only reference to it.
         let body = self.body
         self.body = []
-        return RPCCall(actor: actor, target: String(name.utf8.dropFirst(2))!, body: body)
+        return RPCCall(actorID: actorID, target: String(decoding: name.utf8.dropFirst(2), as: UTF8.self), body: body)
     }
 }
 
@@ -56,6 +58,8 @@ public struct RPCInvocationDecoder: DistributedTargetInvocationDecoder {
         self.actorType = actorType
     }
 
+    /// A `@Resolvable` protocol's methods are generic over the actor that implements them, so the
+    /// served actor's type is the one substitution, in place of the caller's stub.
     public mutating func decodeGenericSubstitutions() throws -> [Any.Type] { [actorType] }
 
     /// Decodes the next argument in place, from its slice of the body.
@@ -66,7 +70,7 @@ public struct RPCInvocationDecoder: DistributedTargetInvocationDecoder {
         do {
             return try decodeJSON(Argument.self, from: body.span.bytes.extracting(range))
         } catch {
-            throw RPCError(.invalidArgument, "Argument \(next) does not fit: \(error)")
+            throw RPCError(.invalidArgument, "Argument \(next) does not decode: \(error)")
         }
     }
 
@@ -104,9 +108,14 @@ public final class RPCResultHandler: DistributedTargetInvocationResultHandler {
     }
 
     func fail(with error: any Error) {
-        if let error = error as? any RPCErrorConvertible {
+        switch error {
+        case let error as any RPCErrorConvertible:
             result = .failure(error.rpcError)
-        } else {
+        case let error as ExecuteDistributedTargetError:
+            // The call doesn't fit any of the actor's methods.
+            let code: RPCError.Code = error.errorCode == .targetAccessorNotFound ? .unimplemented : .invalidArgument
+            result = .failure(RPCError(code, error.message))
+        default:
             onError(error)
             result = .failure(.internal)
         }

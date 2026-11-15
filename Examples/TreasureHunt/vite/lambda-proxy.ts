@@ -148,7 +148,7 @@ function gatewayEvent(req: IncomingMessage, path: string, body: Buffer) {
         path,
         protocol: "HTTP/1.1",
         sourceIp: req.socket.remoteAddress ?? "127.0.0.1",
-        userAgent: headerValue(req.headers["user-agent"]) || "vite",
+        userAgent: req.headers["user-agent"] ?? "vite",
       },
       requestId: "local",
       routeKey,
@@ -175,7 +175,7 @@ function incomingHeaders(req: IncomingMessage): Record<string, string> {
     if (value === undefined) {
       continue;
     }
-    headers[name] = Array.isArray(value) ? value.join(",") : value;
+    headers[name] = headerValue(value);
   }
   return headers;
 }
@@ -186,15 +186,12 @@ function outgoingHeaders(req: IncomingMessage): Headers {
     if (value === undefined || name === "host" || name === "content-length") {
       continue;
     }
-    headers.set(name, Array.isArray(value) ? value.join(",") : value);
+    headers.set(name, headerValue(value));
   }
   return headers;
 }
 
-function headerValue(value: string | string[] | undefined): string {
-  if (value === undefined) {
-    return "";
-  }
+function headerValue(value: string | string[]): string {
   return Array.isArray(value) ? value.join(",") : value;
 }
 

@@ -5,14 +5,17 @@ public import SwiftRPC
 /// Sends requests with the browser's `fetch`.
 ///
 /// ```swift
-/// let transport = HTTPTransport(client: FetchClient(baseURL: "https://api.example.com/rpc"))
+/// let transport = HTTPTransport(
+///     executor: FetchExecutor(origin: "https://api.example.com"),
+///     options: .init(basePath: "/rpc")
+/// )
 /// ```
-public struct FetchClient: HTTPClient {
-    /// Prefixed to every request path, without a trailing slash. Empty sends to the page's own origin.
-    public var baseURL: String
+public struct FetchExecutor: HTTPExecutor {
+    /// Prefixed to every request path, e.g. `https://api.example.com`. Empty sends to the page's own origin.
+    public var origin: String
 
-    public init(baseURL: String = "") {
-        self.baseURL = baseURL
+    public init(origin: String = "") {
+        self.origin = origin
     }
 
     public func execute(_ request: HTTPRequest, body: [UInt8]) async throws -> (HTTPResponse, [UInt8]) {
@@ -21,7 +24,7 @@ public struct FetchClient: HTTPClient {
             try headers.append(field.name.rawName, field.value)
         }
         let response = try await fetch(
-            baseURL + (request.path ?? ""),
+            origin + (request.path ?? ""),
             RequestInit(method: request.method.rawValue, headers: headers, body: JSTypedArray(body))
         )
         return (
@@ -52,7 +55,7 @@ struct Response {
 @JSFunction(from: .global)
 func fetch(_ input: String, _ init: RequestInit) async throws(JSException) -> Response
 
-extension Array<UInt8> {
+extension [UInt8] {
     /// Copies the bytes out of JavaScript in one go.
     fileprivate init(_ bytes: JSTypedArray<UInt8>) {
         let count = bytes.length

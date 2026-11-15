@@ -17,7 +17,7 @@ public struct RPCError: RPCErrorConvertible, Hashable, CustomStringConvertible {
 
     /// What went wrong, independent of the transport. ``HTTPTransport`` maps each to an HTTP status.
     public enum Code: Hashable, Sendable {
-        /// The call itself is malformed: an unknown target, a malformed body, or arguments that don't fit.
+        /// The call itself is malformed: a malformed body, or arguments that don't fit.
         case invalidArgument
         case unauthenticated
         case permissionDenied
@@ -26,6 +26,7 @@ public struct RPCError: RPCErrorConvertible, Hashable, CustomStringConvertible {
         /// The call is well-formed, but the method refuses it in the current state.
         case failedPrecondition
         case resourceExhausted
+        /// The service has no such method, e.g. because client and server were built from different code.
         case unimplemented
         case unavailable
         case `internal`
@@ -55,5 +56,6 @@ extension RPCError {
 
     static let malformedBody = Self(.invalidArgument, "The body is not a JSON array of arguments.")
     static let missingArgument = Self(.invalidArgument, "The call is missing an argument.")
+    static let malformedResponse = Self(.internal, "The response does not decode as the return type.")
     static let `internal` = Self(.internal, "Internal error.")
 }

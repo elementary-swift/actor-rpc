@@ -25,6 +25,9 @@ public struct Cell: Sendable, Hashable {
 
     /// The map is `size` × `size` squares.
     public static let size = 10
+
+    /// Every square on the map, row by row.
+    public static let all = (0..<size).flatMap { row in (0..<size).map { Cell(row: row, column: $0) } }
 }
 
 /// What digging at a square turned up.

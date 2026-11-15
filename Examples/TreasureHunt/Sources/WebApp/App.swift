@@ -10,10 +10,10 @@ struct App {
     static func main() {
         JavaScriptEventLoop.installGlobalExecutor()
 
-        // Set in index.html: `/rpc` locally, the stack's HttpApiUrl after deploy.
-        let endpoint = JSObject.global["__RPC_ENDPOINT__"].string ?? ""
-        let hunt = RPCClient(transport: HTTPTransport(client: FetchClient(baseURL: endpoint)))
-            .resolve($TreasureHunt.self)
+        // Set in index.html: empty locally, the stack's ApiOrigin after deploy.
+        let origin = JSObject.global["__RPC_ORIGIN__"].string ?? ""
+        let transport = HTTPTransport(executor: FetchExecutor(origin: origin), options: .init(basePath: "/rpc"))
+        let hunt = RPCClient(transport: transport).resolve($TreasureHunt.self)
         Application(ContentView(hunt: hunt))
             .mount(in: .body)
     }

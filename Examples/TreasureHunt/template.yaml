@@ -37,6 +37,6 @@ Resources:
             PayloadFormatVersion: "2.0"
 
 Outputs:
-  HttpApiUrl:
-    Description: Transport base. Set __RPC_ENDPOINT__ in index.html to it.
-    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/rpc"
+  ApiOrigin:
+    Description: Set __RPC_ORIGIN__ in index.html to it.
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"

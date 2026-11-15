@@ -1,16 +1,15 @@
 import ElementaryFlow
 import ElementaryUI
 import Shared
-import _Concurrency
 
 @View
 struct ContentView {
     let hunt: any TreasureHunt
 
     @State var game: Game?
-    /// Steps to the treasure, by square index, for each square dug so far.
-    @State var dug: [Int: Int] = [:]
-    @State var revealed: Int?
+    /// Steps to the treasure from each cell dug so far.
+    @State var dug: [Cell: Int] = [:]
+    @State var revealed: Cell?
     @State var note = "Burying the treasure."
     @State var isBusy = true
 
@@ -34,12 +33,12 @@ struct ContentView {
                             .style(contentsOf: Theme.status)
 
                         FlexRow(gap: 4, wrap: .wrap) {
-                            for index in 0..<(Cell.size * Cell.size) {
-                                Site(
-                                    text: text(index),
-                                    fill: fill(index),
-                                    enabled: canDig(index),
-                                    onDig: { dig(index) }
+                            for cell in Cell.all {
+                                Square(
+                                    text: text(cell),
+                                    fill: fill(cell),
+                                    enabled: canDig(cell),
+                                    onDig: { dig(cell) }
                                 )
                             }
                         }
@@ -93,20 +92,20 @@ struct ContentView {
         !isBusy && game != nil && !isFound && revealed == nil
     }
 
-    private func text(_ index: Int) -> String {
-        if dug[index] == 0 || revealed == index { return "★" }
-        return dug[index].map { String($0) } ?? ""
+    private func text(_ cell: Cell) -> String {
+        if dug[cell] == 0 || revealed == cell { return "★" }
+        return dug[cell].map { String($0) } ?? ""
     }
 
-    private func fill(_ index: Int) -> CSSColor {
-        if dug[index] == 0 || revealed == index { return Theme.gold }
-        guard let steps = dug[index] else { return Theme.squareFill }
+    private func fill(_ cell: Cell) -> CSSColor {
+        if dug[cell] == 0 || revealed == cell { return Theme.gold }
+        guard let steps = dug[cell] else { return Theme.squareFill }
         // Red when close, blue when far.
         return "hsl(\(min(steps - 1, 17) * 13) 80% 64%)"
     }
 
-    private func canDig(_ index: Int) -> Bool {
-        isPlaying && dug[index] == nil
+    private func canDig(_ cell: Cell) -> Bool {
+        isPlaying && dug[cell] == nil
     }
 
     private func startOver() {
@@ -123,16 +122,16 @@ struct ContentView {
         }
     }
 
-    private func dig(_ index: Int) {
+    private func dig(_ cell: Cell) {
         guard let game else { return }
         Task {
             await perform {
-                switch try await hunt.probe(Cell(row: index / Cell.size, column: index % Cell.size), in: game) {
+                switch try await hunt.probe(cell, in: game) {
                 case .found:
-                    dug[index] = 0
+                    dug[cell] = 0
                     note = "Found it in \(dug.count) \(dug.count == 1 ? "dig" : "digs")."
                 case .away(let steps):
-                    dug[index] = steps
+                    dug[cell] = steps
                     note = "\(steps) \(steps == 1 ? "step" : "steps") away."
                 }
             }
@@ -143,8 +142,7 @@ struct ContentView {
         guard let game else { return }
         Task {
             await perform {
-                let cell = try await hunt.reveal(game)
-                revealed = cell.row * Cell.size + cell.column
+                revealed = try await hunt.reveal(game)
                 note = "It was here."
             }
         }
@@ -162,7 +160,7 @@ struct ContentView {
 }
 
 @View
-private struct Site {
+private struct Square {
     var text: String
     var fill: CSSColor
     var enabled: Bool
@@ -172,9 +170,9 @@ private struct Site {
         button(.type(.button)) { text }
             .attributes(.disabled, when: !enabled)
             .onClick { onDig() }
-            .style(contentsOf: Theme.site)
+            .style(contentsOf: Theme.square)
             .style(.background(fill))
-            .style(when: .hover, contentsOf: Theme.siteHover)
-            .style(when: .disabled, contentsOf: Theme.siteDisabled)
+            .style(when: .hover, contentsOf: Theme.squareHover)
+            .style(when: .disabled, contentsOf: Theme.squareDisabled)
     }
 }

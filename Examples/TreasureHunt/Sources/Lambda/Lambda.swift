@@ -6,8 +6,8 @@ import SwiftRPC
 @main
 struct TreasureHuntLambda {
     static func main() async throws {
-        let server = RPCServer { error in print("Call failed: \(error)") }
-        server.serve(TreasureHuntActor.init)
+        var server = RPCServer { error in print("Call failed: \(error)") }
+        server.serve(perCall: TreasureHuntActor.init)
 
         try await LambdaRuntime { (event: APIGatewayV2Request, _: LambdaContext) in
             // template.yaml routes POST /rpc/{proxy+} here.
@@ -18,7 +18,7 @@ struct TreasureHuntLambda {
             )
             return APIGatewayV2Response(
                 statusCode: response.status,
-                headers: ["content-type": "application/json"],
+                headers: Dictionary(response.headerFields.map { ($0.name.canonicalName, $0.value) }) { $1 },
                 body: String(decoding: body, as: UTF8.self)
             )
         }.run()
