@@ -322,7 +322,7 @@ func malformedBodyIsAnInvalidArgument(body: String) async throws {
     let client = HTTPLoopback(server: noteServer(basePath: "/rpc"))
     let transport = RPCHTTPTransport(
         executor: client,
-        options: .init(basePath: "/rpc", headerFields: [.authorization: "Bearer x"])
+        options: .init(basePath: "/rpc") { $0[.authorization] = "Bearer x" }
     )
     let notes = RPCClient(transport: transport).resolve($Notes.self)
     #expect(try await notes.echo("hi") == "hi")

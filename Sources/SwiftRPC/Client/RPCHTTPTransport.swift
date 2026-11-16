@@ -16,10 +16,13 @@ public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
     public struct Options: Sendable {
         /// Where the server mounts SwiftRPC, e.g. `/rpc`. No trailing slash.
         public var basePath: String
-        /// Sent with every call, e.g. an `authorization` header.
-        public var headerFields: HTTPFields
+        /// Runs before every call to set its header fields, e.g. the current `authorization` token.
+        public var headerFields: @Sendable (inout HTTPFields) async throws -> Void
 
-        public init(basePath: String = "", headerFields: HTTPFields = [:]) {
+        public init(
+            basePath: String = "",
+            headerFields: @escaping @Sendable (inout HTTPFields) async throws -> Void = { _ in }
+        ) {
             self.basePath = basePath
             self.headerFields = headerFields
         }
@@ -34,7 +37,8 @@ public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
     }
 
     public func send(_ call: RPCCall) async throws -> [UInt8] {
-        var headerFields = options.headerFields
+        var headerFields = HTTPFields()
+        try await options.headerFields(&headerFields)
         headerFields[.contentType] = "application/json"
         let request = HTTPRequest(
             method: .post,
