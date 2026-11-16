@@ -1,7 +1,7 @@
-/// A failed call, as the caller sees it: a code and a message.
+/// What a client throws for a call that failed on the server.
 ///
-/// A client throws it for every call that fails on the server. A distributed method can throw it
-/// too, to fail the call with that code, e.g. `throw RPCError(.unauthenticated, "Sign in first.")`.
+/// A distributed method can throw it too, to fail the call with that code, e.g.
+/// `throw RPCError(.unauthenticated, "Sign in first.")`.
 public struct RPCError: RPCErrorConvertible, Hashable, CustomStringConvertible {
     public var code: Code
     public var message: String
@@ -15,23 +15,31 @@ public struct RPCError: RPCErrorConvertible, Hashable, CustomStringConvertible {
 
     public var description: String { message }
 
-    /// What went wrong, independent of the transport. ``HTTPTransport`` maps each to an HTTP status.
-    public enum Code: Hashable, Sendable {
+    /// A service can define its own codes next to these:
+    /// `extension RPCError.Code { static let outOfStock = Self(rawValue: "out_of_stock") }`.
+    public struct Code: Hashable, Sendable {
+        /// The name on the wire.
+        public let rawValue: String
+
+        public init(rawValue: String) {
+            self.rawValue = rawValue
+        }
+
         /// The call itself is malformed: a malformed body, or arguments that don't fit.
-        case invalidArgument
-        case unauthenticated
-        case permissionDenied
-        case notFound
-        case alreadyExists
+        public static let invalidArgument = Self(rawValue: "invalid_argument")
+        public static let unauthenticated = Self(rawValue: "unauthenticated")
+        public static let permissionDenied = Self(rawValue: "permission_denied")
+        public static let notFound = Self(rawValue: "not_found")
+        public static let alreadyExists = Self(rawValue: "already_exists")
         /// The call is well-formed, but the method refuses it in the current state.
-        case failedPrecondition
-        case resourceExhausted
+        public static let failedPrecondition = Self(rawValue: "failed_precondition")
+        public static let resourceExhausted = Self(rawValue: "resource_exhausted")
         /// The service has no such method, e.g. because client and server were built from different code.
-        case unimplemented
-        case unavailable
-        case `internal`
-        /// The transport reported a failure that maps to no other code.
-        case unknown
+        public static let unimplemented = Self(rawValue: "unimplemented")
+        public static let unavailable = Self(rawValue: "unavailable")
+        public static let internalError = Self(rawValue: "internal_error")
+        /// The transport reported a failure that names no code.
+        public static let unknown = Self(rawValue: "unknown")
     }
 }
 
@@ -39,7 +47,7 @@ public struct RPCError: RPCErrorConvertible, Hashable, CustomStringConvertible {
 ///
 /// When a distributed method throws one, the call fails with its ``rpcError``. By default that is
 /// ``RPCError/Code/failedPrecondition`` with the error's `description`. Any other error reaches the
-/// caller as a bare ``RPCError/Code/internal``, so internal details don't leak; the server's
+/// caller as a bare ``RPCError/Code/internalError``, so internal details don't leak; the server's
 /// `onError` sees it instead.
 public protocol RPCErrorConvertible: Error {
     var rpcError: RPCError { get }
@@ -56,6 +64,10 @@ extension RPCError {
 
     static let malformedBody = Self(.invalidArgument, "The body is not a JSON array of arguments.")
     static let missingArgument = Self(.invalidArgument, "The call is missing an argument.")
-    static let malformedResponse = Self(.internal, "The response does not decode as the return type.")
-    static let `internal` = Self(.internal, "Internal error.")
+    static let mismatchedCall = Self(.invalidArgument, "The call does not fit the method.")
+    static let unknownMethod = Self(.unimplemented, "The service has no such method.")
+    static let unsupportedTarget = Self(.unimplemented, "The target is not a method of a @Resolvable protocol.")
+    static let genericMethod = Self(.unimplemented, "Generic distributed methods are not supported.")
+    static let malformedResponse = Self(.internalError, "The response does not decode as the return type.")
+    static let opaque = Self(.internalError, "Internal error.")
 }

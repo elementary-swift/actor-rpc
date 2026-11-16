@@ -14,9 +14,9 @@ public struct RPCClient: Sendable {
         system = RPCActorSystem(transport: transport)
     }
 
-    /// The server's actor for `service`.
+    /// The server's actor for `service`, the `$`-prefixed stub of a `@Resolvable` protocol.
     public func resolve<Service: RPCService>(_ service: Service.Type) -> Service {
         // A client resolves every ID as remote, which can't fail.
-        try! Service.resolve(id: RPCActorID(rpcPath: Service.rpcPath), using: system)
+        try! Service.resolve(id: RPCActorID(Service.self), using: system)
     }
 }

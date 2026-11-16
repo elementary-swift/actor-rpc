@@ -5,12 +5,12 @@ public import SwiftRPC
 /// Sends requests with the browser's `fetch`.
 ///
 /// ```swift
-/// let transport = HTTPTransport(
+/// let transport = RPCHTTPTransport(
 ///     executor: FetchExecutor(origin: "https://api.example.com"),
 ///     options: .init(basePath: "/rpc")
 /// )
 /// ```
-public struct FetchExecutor: HTTPExecutor {
+public struct FetchExecutor: RPCHTTPExecutor {
     /// Prefixed to every request path, e.g. `https://api.example.com`. Empty sends to the page's own origin.
     public var origin: String
 
@@ -56,7 +56,6 @@ struct Response {
 func fetch(_ input: String, _ init: RequestInit) async throws(JSException) -> Response
 
 extension [UInt8] {
-    /// Copies the bytes out of JavaScript in one go.
     fileprivate init(_ bytes: JSTypedArray<UInt8>) {
         let count = bytes.length
         guard count > 0 else {

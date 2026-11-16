@@ -2,17 +2,17 @@ public import HTTPTypes
 import NewCodable
 
 /// Executes one HTTP request, e.g. with `fetch`, `URLSession`, or AsyncHTTPClient.
-public protocol HTTPExecutor: Sendable {
+public protocol RPCHTTPExecutor: Sendable {
     /// `request` has no scheme or authority; the executor sends it to its server.
     func execute(_ request: HTTPRequest, body: [UInt8]) async throws -> (HTTPResponse, [UInt8])
 }
 
-/// Delivers calls over HTTP: `POST <basePath>/<rpcPath>/<target>`, with the JSON array of the
+/// Delivers calls over HTTP: `POST <basePath>/<serviceName>/<target>`, with the JSON array of the
 /// arguments as the body.
 ///
 /// A failed response throws ``RPCError``; whatever the executor throws, e.g. when the server is
 /// unreachable, is rethrown as is.
-public struct HTTPTransport<Executor: HTTPExecutor>: RPCTransport {
+public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
     public struct Options: Sendable {
         /// Where the server mounts SwiftRPC, e.g. `/rpc`. No trailing slash.
         public var basePath: String
@@ -33,7 +33,7 @@ public struct HTTPTransport<Executor: HTTPExecutor>: RPCTransport {
         self.options = options
     }
 
-    public func send(_ call: consuming RPCCall) async throws -> [UInt8] {
+    public func send(_ call: RPCCall) async throws -> [UInt8] {
         var headerFields = options.headerFields
         headerFields[.contentType] = "application/json"
         let request = HTTPRequest(
@@ -45,9 +45,11 @@ public struct HTTPTransport<Executor: HTTPExecutor>: RPCTransport {
         )
         let (response, body) = try await executor.execute(request, body: call.body)
         guard response.status.kind == .successful else {
-            // A proxy in front of the server may fail with plain text instead of a JSON string.
-            let message = (try? decodeJSON(String.self, from: body.span.bytes)) ?? String(decoding: body, as: UTF8.self)
-            throw RPCError(RPCError.Code(response.status), message)
+            if let failure = try? decodeJSON(RPCErrorBody.self, from: body.span.bytes) {
+                throw RPCError(RPCError.Code(rawValue: failure.code), failure.message)
+            }
+            // Not from an RPCServer, e.g. a proxy's error page.
+            throw RPCError(RPCError.Code(response.status), String(decoding: body, as: UTF8.self))
         }
         return body
     }

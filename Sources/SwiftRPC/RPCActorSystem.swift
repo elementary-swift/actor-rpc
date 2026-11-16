@@ -34,10 +34,10 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         #if hasFeature(Embedded)
         fatalError("Embedded Swift can only call remote actors.")
         #else
-        guard let id = Self.pendingID else {
-            fatalError("Create local actors with RPCServer.serve(perCall:) or serve(shared:).")
+        guard let service = actorType as? any RPCService.Type else {
+            fatalError("\(actorType) is not an RPCService.")
         }
-        return id
+        return RPCActorID(service)
         #endif
     }
 
@@ -73,16 +73,9 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         _ = try await send(invocation.makeCall(actorID: actor.id, target: target))
     }
 
-    private func send(_ call: consuming RPCCall) async throws -> [UInt8] {
+    private func send(_ call: RPCCall) async throws -> [UInt8] {
         // A server never resolves a remote actor, so it never gets here.
         guard let transport else { throw RPCError.unknownActor(call.actorID) }
         return try await transport.send(call)
     }
 }
-
-#if !hasFeature(Embedded)
-extension RPCActorSystem {
-    /// The ID `assignID` hands to the actor being created.
-    @TaskLocal static var pendingID: RPCActorID?
-}
-#endif

@@ -52,5 +52,5 @@ public protocol TreasureHunt: RPCService {
 }
 
 extension TreasureHunt {
-    public static var rpcPath: String { "hunt" }
+    public static var serviceName: String { "hunt" }
 }

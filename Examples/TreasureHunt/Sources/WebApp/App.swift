@@ -12,7 +12,7 @@ struct App {
 
         // Set in index.html: empty locally, the stack's ApiOrigin after deploy.
         let origin = JSObject.global["__RPC_ORIGIN__"].string ?? ""
-        let transport = HTTPTransport(executor: FetchExecutor(origin: origin), options: .init(basePath: "/rpc"))
+        let transport = RPCHTTPTransport(executor: FetchExecutor(origin: origin), options: .init(basePath: "/rpc"))
         let hunt = RPCClient(transport: transport).resolve($TreasureHunt.self)
         Application(ContentView(hunt: hunt))
             .mount(in: .body)

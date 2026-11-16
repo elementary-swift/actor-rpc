@@ -1,5 +1,6 @@
 import Distributed
 import HTTPTypes
+import NewCodable
 import Synchronization
 import Testing
 
@@ -25,10 +26,11 @@ protocol Notes: RPCService {
     distributed func reject() async throws
     distributed func deny() async throws
     distributed func leak() async throws
+    distributed func print() async throws
 }
 
 extension Notes {
-    static var rpcPath: String { "note" }
+    static var serviceName: String { "note" }
 }
 
 distributed actor NoteActor: Notes {
@@ -64,6 +66,54 @@ distributed actor NoteActor: Notes {
     distributed func leak() throws {
         throw Secret()
     }
+
+    distributed func print() throws {
+        throw RPCError(.outOfInk, "Refill.")
+    }
+}
+
+extension RPCError.Code {
+    fileprivate static let outOfInk = Self(rawValue: "out_of_ink")
+}
+
+/// Its stub, `$SwiftRPCTests`, repeats the words of the module's name, which mangles differently.
+@Resolvable
+protocol SwiftRPCTests: RPCService {
+    distributed func ping() async throws -> String
+}
+
+extension SwiftRPCTests {
+    static var serviceName: String { "tests" }
+}
+
+distributed actor PingActor: SwiftRPCTests {
+    distributed func ping() -> String { "pong" }
+}
+
+@Resolvable
+protocol Strangers: RPCService {
+    distributed func knock() async throws -> String
+}
+
+extension Strangers {
+    static var serviceName: String { "note" }
+}
+
+distributed actor Vault {
+    typealias ActorSystem = RPCActorSystem
+
+    private var secret = "secret"
+
+    distributed func open() -> String { secret }
+}
+
+@Resolvable
+protocol Generics: RPCService {
+    distributed func pick<Value: JSONCodable & Sendable>(_ value: Value) async throws -> String
+}
+
+extension Generics {
+    static var serviceName: String { "generics" }
 }
 
 /// Calls the server in-process, with the note bound as a task-local the way host middleware would.
@@ -71,40 +121,37 @@ private struct Loopback: RPCTransport {
     let server: RPCServer
     var note: String?
 
-    func send(_ call: consuming RPCCall) async throws -> [UInt8] {
-        try await CallNote.$current.withValue(note) { [call] in
-            try await server.send(call)
+    func send(_ call: RPCCall) async throws -> [UInt8] {
+        try await CallNote.$current.withValue(note) {
+            try await server.handle(call)
         }
     }
 }
 
-/// Sends every request through the server's HTTP adapter.
-private final class HTTPLoopback: HTTPExecutor {
+private final class HTTPLoopback: RPCHTTPExecutor {
     let server: RPCServer
-    let basePath: String
     let requests = Mutex<[HTTPRequest]>([])
 
-    init(server: RPCServer, basePath: String = "") {
+    init(server: RPCServer) {
         self.server = server
-        self.basePath = basePath
     }
 
     func execute(_ request: HTTPRequest, body: [UInt8]) async throws -> (HTTPResponse, [UInt8]) {
         requests.withLock { $0.append(request) }
-        return await server.respond(to: request, body: body, basePath: basePath)
+        return await server.respond(to: request, body: body)
     }
 }
 
 private actor Recorder: RPCTransport {
     private(set) var calls: [RPCCall] = []
 
-    func send(_ call: consuming RPCCall) -> [UInt8] {
+    func send(_ call: RPCCall) -> [UInt8] {
         calls.append(call)
         return Array(#""reply""#.utf8)
     }
 }
 
-private struct StaticHTTPExecutor: HTTPExecutor {
+private struct StaticHTTPExecutor: RPCHTTPExecutor {
     var status: HTTPResponse.Status
     var body: String
 
@@ -113,8 +160,11 @@ private struct StaticHTTPExecutor: HTTPExecutor {
     }
 }
 
-private func noteServer(onError: @escaping @Sendable (any Error) -> Void = { _ in }) -> RPCServer {
-    var server = RPCServer(onError: onError)
+private func noteServer(
+    basePath: String = "",
+    onError: @escaping @Sendable (any Error) -> Void = { _ in }
+) -> RPCServer {
+    var server = RPCServer(basePath: basePath, onError: onError)
     server.serve(perCall: NoteActor.init)
     return server
 }
@@ -137,15 +187,21 @@ private func result(of call: RPCCall, body: String) async -> Result<[UInt8], RPC
     var call = call
     call.body = Array(body.utf8)
     do throws(RPCError) {
-        return .success(try await noteServer().send(call))
+        return .success(try await noteServer().handle(call))
     } catch {
         return .failure(error)
     }
 }
 
-private func post(_ path: String, body: String = "[]", method: HTTPRequest.Method = .post) async -> (HTTPResponse, String) {
-    let request = HTTPRequest(method: method, scheme: nil, authority: nil, path: path)
-    let (response, body) = await noteServer().respond(to: request, body: Array(body.utf8), basePath: "/rpc")
+private func post(
+    _ path: String,
+    body: String = "[]",
+    method: HTTPRequest.Method = .post,
+    contentType: String? = "application/json"
+) async -> (HTTPResponse, String) {
+    var request = HTTPRequest(method: method, scheme: nil, authority: nil, path: path)
+    request.headerFields[.contentType] = contentType
+    let (response, body) = await noteServer(basePath: "/rpc").respond(to: request, body: Array(body.utf8))
     return (response, text(body))
 }
 
@@ -157,7 +213,7 @@ private func text(_ bytes: [UInt8]) -> String {
 
 @Test func callEncodesArgumentsAsAJSONArray() async throws {
     let call = try await recordedCall { _ = try await $0.sum([1, 2], plus: 3) }
-    #expect(call.actorID == RPCActorID(rpcPath: "note"))
+    #expect(call.actorID == RPCActorID(serviceName: "note")!)
     #expect(text(call.body) == "[[1,2],3]")
     #expect(!call.target.hasPrefix("$"))
 }
@@ -207,32 +263,42 @@ func stringsRoundTrip(text: String) async throws {
 @Test func otherErrorsAreHiddenFromTheCaller() async throws {
     let seen = Mutex<[String]>([])
     let server = noteServer { error in seen.withLock { $0.append("\(error)") } }
-    let notes = RPCClient(transport: server).resolve($Notes.self)
+    let notes = RPCClient(server: server).resolve($Notes.self)
 
     let error = await #expect(throws: RPCError.self) {
         try await notes.leak()
     }
-    #expect(error == .internal)
+    #expect(error == .opaque)
     #expect(error?.message.contains("Secret") == false)
     #expect(seen.withLock { $0 } == ["Secret()"])
 }
 
 @Test func unknownActorIsNotFound() async throws {
     var call = try await echoCall()
-    call.actorID = RPCActorID(rpcPath: "missing")
+    call.actorID = RPCActorID(serviceName: "missing")!
     #expect(await result(of: call, body: #"["hi"]"#) == .failure(RPCError(.notFound, #"Unknown actor "missing"."#)))
 }
 
 @Test func unknownMethodIsUnimplemented() async throws {
     var call = try await echoCall()
     call.target = call.target.replacing("4echo", with: "4ecko")
-    #expect(await result(of: call, body: #"["hi"]"#).failure?.code == .unimplemented)
+    #expect(await result(of: call, body: #"["hi"]"#) == .failure(.unknownMethod))
 }
 
-@Test func garbledTargetIsAnInvalidArgument() async throws {
+@Test func garbledTargetIsRefused() async throws {
     var call = try await echoCall()
     call.target = "missing"
-    #expect(await result(of: call, body: #"["hi"]"#).failure?.code == .invalidArgument)
+    #expect(await result(of: call, body: #"["hi"]"#) == .failure(.unsupportedTarget))
+}
+
+@Test func runtimeDetailsOfAMismatchedCallAreHidden() async throws {
+    let seen = Mutex<[String]>([])
+    var call = try await echoCall()
+    call.target = call.target.replacing("4echo", with: "4ecko")
+    await #expect(throws: RPCError.unknownMethod) {
+        _ = try await noteServer { error in seen.withLock { $0.append("\(error)") } }.handle(call)
+    }
+    #expect(seen.withLock { $0.count } == 1)
 }
 
 @Test(arguments: ["", "nope", "{}", "[", #"["hi""#, #"["hi"] x"#, #"["hi",]"#, #"[,"hi"]"#, #"["hi" "ho"]"#, #"["unterminated]"#])
@@ -253,8 +319,8 @@ func malformedBodyIsAnInvalidArgument(body: String) async throws {
 // MARK: - HTTP
 
 @Test func httpTransportPostsToThePath() async throws {
-    let client = HTTPLoopback(server: noteServer(), basePath: "/rpc")
-    let transport = HTTPTransport(
+    let client = HTTPLoopback(server: noteServer(basePath: "/rpc"))
+    let transport = RPCHTTPTransport(
         executor: client,
         options: .init(basePath: "/rpc", headerFields: [.authorization: "Bearer x"])
     )
@@ -269,12 +335,13 @@ func malformedBodyIsAnInvalidArgument(body: String) async throws {
 }
 
 @Test func httpRoundTripKeepsErrors() async throws {
-    let transport = HTTPTransport(executor: HTTPLoopback(server: noteServer()))
+    let transport = RPCHTTPTransport(executor: HTTPLoopback(server: noteServer()))
     let notes = RPCClient(transport: transport).resolve($Notes.self)
     try await notes.touch()
     await #expect(throws: RPCError(.unauthenticated, "Sign in first.")) { try await notes.deny() }
     await #expect(throws: RPCError(.failedPrecondition, "Rejected.")) { try await notes.reject() }
-    await #expect(throws: RPCError.internal) { try await notes.leak() }
+    await #expect(throws: RPCError.opaque) { try await notes.leak() }
+    await #expect(throws: RPCError(.outOfInk, "Refill.")) { try await notes.print() }
 }
 
 @Test(arguments: ["/rpc/note/t", "/rpc/note/t?x=1"])
@@ -286,7 +353,7 @@ func pathParsesIntoACall(path: String) throws {
 
 @Test(arguments: [
     "", "/", "/rpc", "/rpc/", "/rpc/note", "/rpc/note/", "/rpc//t", "/rpc/note//t", "/rpc/note/k/t", "/rpc/a/b/c/d", "/note/t",
-    "/rpcx/note/t",
+    "/rpcx/note/t", "/rpc/n%20te/t", "/rpc/nöte/t",
 ])
 func malformedPathIsRejected(path: String) {
     #expect(RPCCall(path: path, basePath: "/rpc", body: []) == nil)
@@ -311,7 +378,27 @@ func malformedPathIsRejected(path: String) {
     let call = try await recordedCall { try await $0.deny() }
     let (response, body) = await post("/rpc" + call.path)
     #expect(response.status == .unauthorized)
-    #expect(body == #""Sign in first.""#)
+    #expect(response.headerFields[.contentType] == "application/json")
+    #expect(body == #"{"code":"unauthenticated","message":"Sign in first."}"#)
+}
+
+@Test func respondFailsACodeOfTheServicesOwnWithA500() async throws {
+    let call = try await recordedCall { try await $0.print() }
+    let (response, body) = await post("/rpc" + call.path)
+    #expect(response.status == .internalServerError)
+    #expect(body == #"{"code":"out_of_ink","message":"Refill."}"#)
+}
+
+@Test(arguments: [nil, "text/plain", "application/x-www-form-urlencoded"])
+func respondRejectsOtherContentTypes(contentType: String?) async throws {
+    let call = try await recordedCall { try await $0.touch() }
+    #expect(await post("/rpc" + call.path, contentType: contentType).0.status == .unsupportedMediaType)
+}
+
+@Test(arguments: ["application/json; charset=utf-8", "Application/JSON"])
+func respondAcceptsJSONContentTypes(contentType: String) async throws {
+    let call = try await recordedCall { try await $0.touch() }
+    #expect(await post("/rpc" + call.path, contentType: contentType).0.status == .noContent)
 }
 
 @Test func respondRejectsAMalformedPath() async {
@@ -324,14 +411,14 @@ func malformedPathIsRejected(path: String) {
 }
 
 @Test func undecodableResponseIsInternal() async throws {
-    let transport = HTTPTransport(executor: StaticHTTPExecutor(status: .ok, body: "42"))
+    let transport = RPCHTTPTransport(executor: StaticHTTPExecutor(status: .ok, body: "42"))
     await #expect(throws: RPCError.malformedResponse) {
         _ = try await RPCClient(transport: transport).resolve($Notes.self).echo("hi")
     }
 }
 
 @Test func plainTextFailureFromAProxyIsKept() async throws {
-    let transport = HTTPTransport(executor: StaticHTTPExecutor(status: .badGateway, body: "Upstream down."))
+    let transport = RPCHTTPTransport(executor: StaticHTTPExecutor(status: .badGateway, body: "Upstream down."))
     await #expect(throws: RPCError(.unavailable, "Upstream down.")) {
         try await RPCClient(transport: transport).resolve($Notes.self).touch()
     }
@@ -352,9 +439,39 @@ func malformedPathIsRejected(path: String) {
 @Test func sharedActorKeepsItsState() async throws {
     var server = RPCServer()
     server.serve(shared: NoteActor.init)
-    let notes = RPCClient(transport: server).resolve($Notes.self)
+    let notes = RPCClient(server: server).resolve($Notes.self)
     #expect(try await notes.count() == 1)
     #expect(try await notes.count() == 2)
+}
+
+@Test func stubThatRepeatsTheModulesNameIsServed() async throws {
+    var server = RPCServer()
+    server.serve(perCall: PingActor.init)
+    #expect(try await RPCClient(server: server).resolve($SwiftRPCTests.self).ping() == "pong")
+}
+
+@Test func methodOfAnotherActorTypeDoesNotRun() async throws {
+    // The runtime would run `Vault.open` on a `NoteActor`, reading its memory as a `Vault`.
+    let client = RPCClient(server: noteServer())
+    let vault = try Vault.resolve(id: RPCActorID(serviceName: "note")!, using: client.system)
+    await #expect(throws: RPCError.unsupportedTarget) { _ = try await vault.open() }
+}
+
+@Test func methodOfAProtocolTheActorLacksDoesNotRun() async throws {
+    let strangers = RPCClient(server: noteServer()).resolve($Strangers.self)
+    await #expect(throws: RPCError.mismatchedCall) { _ = try await strangers.knock() }
+}
+
+@Test func genericMethodFailsBeforeItIsSent() async throws {
+    let recorder = Recorder()
+    let generics = RPCClient(transport: recorder).resolve($Generics.self)
+    await #expect(throws: RPCError.genericMethod) { _ = try await generics.pick(1) }
+    #expect(await recorder.calls.isEmpty)
+}
+
+@Test(arguments: ["", "a/b", "a b", "ä", "a?b", "a%20b"])
+func serviceNameMustBeURLSafe(name: String) {
+    #expect(RPCActorID(serviceName: name) == nil)
 }
 
 extension Result {

@@ -9,7 +9,7 @@ import Testing
 private func hunt() -> any TreasureHunt {
     var server = RPCServer()
     server.serve(perCall: TreasureHuntActor.init)
-    return RPCClient(transport: server).resolve($TreasureHunt.self)
+    return RPCClient(server: server).resolve($TreasureHunt.self)
 }
 
 /// Finds the treasure the way a player would, from the distances alone.

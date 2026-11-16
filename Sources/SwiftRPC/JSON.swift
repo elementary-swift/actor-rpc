@@ -1,19 +1,16 @@
 import NewCodable
 
-/// Encodes straight into one buffer and copies it out once.
-@inline(__always)
 func encodeJSON(_ value: borrowing some JSONEncodable & ~Copyable) throws(CodingError.Encoding) -> [UInt8] {
     try NewJSONEncoder().encode(value) { bytes throws(CodingError.Encoding) in
         bytes.withUnsafeBytes { Array($0) }
     }
 }
 
-/// Decodes in place from borrowed bytes.
-@inline(__always)
 func decodeJSON<T: JSONDecodable>(_ type: T.Type, from bytes: RawSpan) throws(CodingError.Decoding) -> T {
     try NewJSONDecoder().decode(type, from: bytes)
 }
 
+/// A stand-in until NewCodable can decode an array of differently typed elements one by one.
 enum JSONArray {
     /// The byte range of each element of a top-level JSON array.
     ///

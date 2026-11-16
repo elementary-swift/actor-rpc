@@ -9,10 +9,10 @@ public import Distributed
 /// }
 ///
 /// extension Greeter {
-///     public static var rpcPath: String { "greeter" }
+///     public static var serviceName: String { "greeter" }
 /// }
 /// ```
 public protocol RPCService: DistributedActor where ActorSystem == RPCActorSystem {
-    /// The first path segment of every call. URL-safe characters only (letters, digits, `-._~`).
-    static var rpcPath: String { get }
+    /// The first path segment of every call. Letters, digits and `-._~` only; anything else traps.
+    static var serviceName: String { get }
 }
