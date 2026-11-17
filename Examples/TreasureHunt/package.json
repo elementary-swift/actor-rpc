@@ -6,6 +6,7 @@
     "dev:sam": "LAMBDA_PROXY_MODE=sam vite --host 0.0.0.0 --open",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
+    "build:lambda": "docker run --rm --platform linux/arm64 -v \"$PWD/../..\":/workspace -w /workspace/Examples/TreasureHunt swiftlang/swift:nightly-main-amazonlinux2023 bash -c 'B=\"-c release --scratch-path .build/linux\" && swift build $B --product Lambda --static-swift-stdlib -Xlinker -s && mkdir -p .build/lambda && cp \"$(swift build $B --show-bin-path)/Lambda\" .build/lambda/bootstrap'",
     "api": "sam local start-api --warm-containers EAGER"
   },
   "dependencies": {

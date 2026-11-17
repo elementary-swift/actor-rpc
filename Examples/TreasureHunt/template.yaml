@@ -18,7 +18,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: elementary-treasure-hunt
-      CodeUri: .build/plugins/AWSLambdaBuilder/outputs/AWSLambdaBuilder/Lambda/Lambda.zip
+      CodeUri: .build/lambda
       Handler: swift.bootstrap
       Runtime: provided.al2023
       Architectures:
