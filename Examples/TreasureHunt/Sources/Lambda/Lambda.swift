@@ -11,8 +11,9 @@ struct TreasureHuntLambda {
 
         // template.yaml routes POST /rpc/{proxy+} here.
         try await LambdaRuntime { (event: APIGatewayV2Request, _: LambdaContext) in
-            let (response, body) = await server.respond(to: HTTPRequest(event), body: try event.decodeBody().map { Array($0) } ?? [])
-            return APIGatewayV2Response(response, body: body)
+            let body = event.body ?? ""
+            let (response, responseBody) = await server.respond(to: HTTPRequest(event), body: body.utf8Span.span)
+            return APIGatewayV2Response(response, body: responseBody)
         }.run()
     }
 }

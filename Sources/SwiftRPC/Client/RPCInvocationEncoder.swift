@@ -22,7 +22,9 @@ public struct RPCInvocationEncoder: DistributedTargetInvocationEncoder {
     ) throws {
         if body.count > 1 { body.append(.comma) }
         try NewJSONEncoder().encode(argument.value) { bytes throws(CodingError.Encoding) in
-            bytes.withUnsafeBytes { body.append(contentsOf: $0) }
+            self.body.append(addingCapacity: bytes.byteCount) { output in
+                for index in bytes.byteOffsets { output.append(bytes[index]) }
+            }
         }
     }
 
@@ -30,18 +32,13 @@ public struct RPCInvocationEncoder: DistributedTargetInvocationEncoder {
 
     public mutating func recordReturnType<R: JSONCodable>(_ type: R.Type) throws {}
 
-    public mutating func doneRecording() throws {}
-
-    mutating func makeCall(actorID: RPCActorID, target: RemoteCallTarget) -> RPCCall {
-        #if hasFeature(Embedded)
-        let name = target.identifier.withUnsafeBytes { String(decoding: $0, as: UTF8.self) }
-        #else
-        let name = target.identifier
-        #endif
+    public mutating func doneRecording() throws {
         body.append(.closeBracket)
-        // Hands the buffer over, so the call holds the only reference to it.
-        let body = self.body
-        self.body = []
-        return RPCCall(actorID: actorID, target: String(decoding: name.utf8.dropFirst(2), as: UTF8.self), body: body)
+    }
+
+    /// The recorded arguments as a JSON array.
+    var arguments: Span<UInt8> {
+        @_lifetime(borrow self)
+        get { body.span }
     }
 }

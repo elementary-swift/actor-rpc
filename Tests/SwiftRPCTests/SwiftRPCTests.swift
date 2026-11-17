@@ -121,7 +121,7 @@ private struct Loopback: RPCTransport {
     let server: RPCServer
     var note: String?
 
-    func send(_ call: RPCCall) async throws -> [UInt8] {
+    func send(_ call: sending RPCCall) async throws -> [UInt8] {
         try await CallNote.$current.withValue(note) {
             try await server.handle(call)
         }
@@ -136,17 +136,26 @@ private final class HTTPLoopback: RPCHTTPExecutor {
         self.server = server
     }
 
-    func execute(_ request: HTTPRequest, body: [UInt8]) async throws -> (HTTPResponse, [UInt8]) {
+    func execute(_ request: HTTPRequest, body: Span<UInt8>) async throws -> (HTTPResponse, [UInt8]) {
         requests.withLock { $0.append(request) }
         return await server.respond(to: request, body: body)
     }
 }
 
-private actor Recorder: RPCTransport {
-    private(set) var calls: [RPCCall] = []
+/// A call copied out of `send`, so it can outlive it.
+private struct RecordedCall {
+    var actorID: RPCActorID
+    var target: String
+    var body: [UInt8]
 
-    func send(_ call: RPCCall) -> [UInt8] {
-        calls.append(call)
+    var path: String { "/\(actorID)/\(target)" }
+}
+
+private actor Recorder: RPCTransport {
+    private(set) var calls: [RecordedCall] = []
+
+    func send(_ call: sending RPCCall) -> [UInt8] {
+        calls.append(RecordedCall(actorID: call.actorID, target: String(copying: call.target), body: Array(copying: call.body)))
         return Array(#""reply""#.utf8)
     }
 }
@@ -155,7 +164,7 @@ private struct StaticHTTPExecutor: RPCHTTPExecutor {
     var status: HTTPResponse.Status
     var body: String
 
-    func execute(_ request: HTTPRequest, body _: [UInt8]) -> (HTTPResponse, [UInt8]) {
+    func execute(_ request: HTTPRequest, body _: Span<UInt8>) -> (HTTPResponse, [UInt8]) {
         (HTTPResponse(status: status), Array(body.utf8))
     }
 }
@@ -173,21 +182,22 @@ private func remoteNotes(note: String? = nil) -> $Notes {
     RPCClient(transport: Loopback(server: noteServer(), note: note)).resolve($Notes.self)
 }
 
-private func recordedCall(_ call: (any Notes) async throws -> Void) async throws -> RPCCall {
+private func recordedCall(_ call: (any Notes) async throws -> Void) async throws -> RecordedCall {
     let recorder = Recorder()
     try? await call(RPCClient(transport: recorder).resolve($Notes.self))
     return try #require(await recorder.calls.first)
 }
 
-private func echoCall() async throws -> RPCCall {
+private func echoCall() async throws -> RecordedCall {
     try await recordedCall { _ = try await $0.echo("hi") }
 }
 
-private func result(of call: RPCCall, body: String) async -> Result<[UInt8], RPCError> {
-    var call = call
-    call.body = Array(body.utf8)
+private func result(of call: RecordedCall, body: String) async -> Result<[UInt8], RPCError> {
+    let body = Array(body.utf8)
     do throws(RPCError) {
-        return .success(try await noteServer().handle(call))
+        return .success(
+            try await noteServer().handle(RPCCall(actorID: call.actorID, target: call.target.utf8Span, body: body.span))
+        )
     } catch {
         return .failure(error)
     }
@@ -201,8 +211,15 @@ private func post(
 ) async -> (HTTPResponse, String) {
     var request = HTTPRequest(method: method, scheme: nil, authority: nil, path: path)
     request.headerFields[.contentType] = contentType
-    let (response, body) = await noteServer(basePath: "/rpc").respond(to: request, body: Array(body.utf8))
+    let bytes = Array(body.utf8)
+    let (response, body) = await noteServer(basePath: "/rpc").respond(to: request, body: bytes.span)
     return (response, text(body))
+}
+
+private func parse(_ path: String) -> (actorID: RPCActorID, target: String)? {
+    let body: [UInt8] = []
+    guard let call = RPCCall(path: path.utf8Span, basePath: "/rpc", body: body.span) else { return nil }
+    return (call.actorID, String(copying: call.target))
 }
 
 private func text(_ bytes: [UInt8]) -> String {
@@ -296,7 +313,8 @@ func stringsRoundTrip(text: String) async throws {
     var call = try await echoCall()
     call.target = call.target.replacing("4echo", with: "4ecko")
     await #expect(throws: RPCError.unknownMethod) {
-        _ = try await noteServer { error in seen.withLock { $0.append("\(error)") } }.handle(call)
+        _ = try await noteServer { error in seen.withLock { $0.append("\(error)") } }
+            .handle(RPCCall(actorID: call.actorID, target: call.target.utf8Span, body: call.body.span))
     }
     #expect(seen.withLock { $0.count } == 1)
 }
@@ -346,9 +364,9 @@ func malformedBodyIsAnInvalidArgument(body: String) async throws {
 
 @Test(arguments: ["/rpc/note/t", "/rpc/note/t?x=1"])
 func pathParsesIntoACall(path: String) throws {
-    let call = try #require(RPCCall(path: path, basePath: "/rpc", body: []))
+    let call = try #require(parse(path))
+    #expect(call.actorID == RPCActorID(serviceName: "note")!)
     #expect(call.target == "t")
-    #expect("/rpc" + call.path == path.prefix { $0 != "?" })
 }
 
 @Test(arguments: [
@@ -356,7 +374,7 @@ func pathParsesIntoACall(path: String) throws {
     "/rpcx/note/t", "/rpc/n%20te/t", "/rpc/nöte/t",
 ])
 func malformedPathIsRejected(path: String) {
-    #expect(RPCCall(path: path, basePath: "/rpc", body: []) == nil)
+    #expect(parse(path) == nil)
 }
 
 @Test func respondAnswersWithJSON() async throws {

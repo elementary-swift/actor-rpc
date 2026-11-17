@@ -24,6 +24,7 @@ let package = Package(
                 .product(name: "NewCodable", package: "swift-foundation"),
             ],
             swiftSettings: [
+                .enableExperimentalFeature("Lifetimes"),
                 .enableUpcomingFeature("ExistentialAny"),
                 .enableUpcomingFeature("InternalImportsByDefault"),
                 .enableUpcomingFeature("MemberImportVisibility"),
@@ -38,6 +39,7 @@ let package = Package(
             ],
             swiftSettings: [
                 .enableExperimentalFeature("Extern"),
+                .enableExperimentalFeature("Lifetimes"),
                 .enableUpcomingFeature("ExistentialAny"),
                 .enableUpcomingFeature("InternalImportsByDefault"),
                 .enableUpcomingFeature("MemberImportVisibility"),

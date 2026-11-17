@@ -11,9 +11,10 @@ public struct RPCInvocationDecoder: DistributedTargetInvocationDecoder {
 
     #if !hasFeature(Embedded)
     init(_ call: RPCCall, actorType: any DistributedActor.Type) throws(RPCError) {
-        guard isStubMethod(call.target) else { throw .unsupportedTarget }
-        guard let elements = JSONArray.elements(of: call.body.span) else { throw .malformedBody }
-        self.body = call.body
+        guard isStubMethod(call.target.span) else { throw .unsupportedTarget }
+        guard let elements = JSONArray.elements(of: call.body) else { throw .malformedBody }
+        // The runtime requires an escapable decoder, so it can't borrow the arguments.
+        self.body = Array(copying: call.body)
         self.elements = elements
         self.actorType = actorType
     }
@@ -90,12 +91,25 @@ public final class RPCResultHandler: DistributedTargetInvocationResultHandler {
 #if !hasFeature(Embedded)
 /// Whether a target is a method of a `@Resolvable` protocol's stub, which mangles as
 /// `<length><module><length>$<protocol>…`. Only a macro can declare a `$` name.
-private func isStubMethod(_ target: String) -> Bool {
-    let length = target.prefix(while: \.isWholeNumber)
-    guard let moduleLength = Int(length) else { return false }
-    var stub = target.dropFirst(length.count + moduleLength)
+private func isStubMethod(_ target: Span<UInt8>) -> Bool {
+    var position = 0
+    var moduleLength = 0
+    while position < target.count, let digit = target[position].digit {
+        moduleLength = moduleLength * 10 + digit
+        guard moduleLength <= target.count else { return false }
+        position += 1
+    }
+    guard position > 0 else { return false }
+    position += moduleLength
     // A leading 0 marks a name that repeats words of the module's, e.g. `$Greeter` in `Greeter`.
-    if stub.first == "0" { stub = stub.dropFirst() }
-    return stub.drop(while: \.isWholeNumber).first == "$"
+    if position < target.count, target[position] == UInt8(ascii: "0") { position += 1 }
+    while position < target.count, target[position].digit != nil { position += 1 }
+    return position < target.count && target[position] == UInt8(ascii: "$")
+}
+
+extension UInt8 {
+    fileprivate var digit: Int? {
+        (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(self) ? Int(self &- UInt8(ascii: "0")) : nil
+    }
 }
 #endif

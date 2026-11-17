@@ -4,7 +4,9 @@ import NewCodable
 /// Executes one HTTP request, e.g. with `fetch`, `URLSession`, or AsyncHTTPClient.
 public protocol RPCHTTPExecutor: Sendable {
     /// `request` has no scheme or authority; the executor sends it to its server.
-    func execute(_ request: HTTPRequest, body: [UInt8]) async throws -> (HTTPResponse, [UInt8])
+    ///
+    /// `body` is borrowed for the duration of the call; copy it to keep it.
+    func execute(_ request: HTTPRequest, body: Span<UInt8>) async throws -> (HTTPResponse, [UInt8])
 }
 
 /// Delivers calls over HTTP: `POST <basePath>/<serviceName>/<target>`, with the JSON array of the
@@ -36,10 +38,13 @@ public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
         self.options = options
     }
 
-    public func send(_ call: RPCCall) async throws -> [UInt8] {
-        var headerFields = HTTPFields()
+    public func send(_ call: sending RPCCall) async throws -> [UInt8] {
+        var headerFields = HTTPFields([
+            HTTPField(name: .contentType, value: "application/json")
+        ])
+
         try await options.headerFields(&headerFields)
-        headerFields[.contentType] = "application/json"
+
         let request = HTTPRequest(
             method: .post,
             scheme: nil,

@@ -4,23 +4,53 @@ import NewCodable
 extension RPCCall {
     /// `/<serviceName>/<target>`.
     var path: String {
-        "/\(actorID)/\(target)"
+        var path = "/"
+        path.reserveCapacity(2 + actorID.serviceName.utf8.count + target.count)
+        path += actorID.serviceName
+        path += "/"
+        path.append(target)
+        return path
     }
 
-    /// Reads a call from its path. `nil` unless it is `<basePath>/<serviceName>/<target>`; a query is ignored.
-    init?(path: String, basePath: String, body: [UInt8]) {
-        var path = path.utf8[...]
-        if let query = path.firstIndex(of: UInt8(ascii: "?")) {
-            path = path[..<query]
-        }
-        guard path.starts(with: basePath.utf8) else { return nil }
-        path = path.dropFirst(basePath.utf8.count)
+    /// Reads a call from its path, borrowing the target from it. `nil` unless the path is
+    /// `<basePath>/<serviceName>/<target>`; a query is ignored.
+    @_lifetime(copy path, copy body)
+    init?(path: UTF8Span, basePath: String, body: Span<UInt8>) {
+        let path = path.span
+        var end = 0
+        while end < path.count, path[end] != UInt8(ascii: "?") { end += 1 }
 
-        let segments = path.split(separator: UInt8(ascii: "/"), omittingEmptySubsequences: false)
-        guard segments.count == 3, segments[0].isEmpty, !segments[2].isEmpty,
-            let actorID = RPCActorID(serviceName: String(decoding: segments[1], as: UTF8.self))
+        var position = 0
+        for byte in basePath.utf8 {
+            guard position < end, path[position] == byte else { return nil }
+            position += 1
+        }
+        guard position < end, path[position] == .slash else { return nil }
+        let serviceStart = position + 1
+        position = serviceStart
+        while position < end, path[position] != .slash { position += 1 }
+        guard position < end else { return nil }
+        let targetStart = position + 1
+        position = targetStart
+        while position < end, path[position] != .slash { position += 1 }
+        guard position == end, targetStart < end,
+            let serviceName = try? UTF8Span(validating: path.extracting(serviceStart..<targetStart - 1)),
+            let actorID = RPCActorID(serviceName: String(copying: serviceName)),
+            let target = try? UTF8Span(validating: path.extracting(targetStart..<end))
         else { return nil }
-        self.init(actorID: actorID, target: String(decoding: segments[2], as: UTF8.self), body: body)
+        self.init(actorID: actorID, target: target, body: body)
+    }
+}
+
+extension UInt8 {
+    fileprivate static let slash = UInt8(ascii: "/")
+}
+
+extension String {
+    /// Appends without an intermediate `String`; reserve capacity first to append in place.
+    mutating func append(_ span: UTF8Span) {
+        var scalars = span.makeUnicodeScalarIterator()
+        while let scalar = scalars.next() { unicodeScalars.append(scalar) }
     }
 }
 

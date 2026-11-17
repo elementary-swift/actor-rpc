@@ -18,14 +18,14 @@ public struct FetchExecutor: RPCHTTPExecutor {
         self.origin = origin
     }
 
-    public func execute(_ request: HTTPRequest, body: [UInt8]) async throws -> (HTTPResponse, [UInt8]) {
+    public func execute(_ request: HTTPRequest, body: Span<UInt8>) async throws -> (HTTPResponse, [UInt8]) {
         let headers = try Headers()
         for field in request.headerFields {
             try headers.append(field.name.rawName, field.value)
         }
         let response = try await fetch(
             origin + (request.path ?? ""),
-            RequestInit(method: request.method.rawValue, headers: headers, body: JSTypedArray(body))
+            RequestInit(method: request.method.rawValue, headers: headers, body: JSTypedArray(copying: body))
         )
         return (
             HTTPResponse(status: HTTPResponse.Status(code: try response.status)),
@@ -54,6 +54,13 @@ struct Response {
 
 @JSFunction(from: .global)
 func fetch(_ input: String, _ init: RequestInit) async throws(JSException) -> Response
+
+extension JSTypedArray<UInt8> {
+    /// JavaScriptKit copies from a pointer, not a span; the pointer doesn't outlive the copy.
+    fileprivate convenience init(copying bytes: Span<UInt8>) {
+        self.init(unsafelyWrapping: bytes.withUnsafeBufferPointer { JSTypedArray(buffer: $0).jsObject })
+    }
+}
 
 extension [UInt8] {
     fileprivate init(_ bytes: JSTypedArray<UInt8>) {

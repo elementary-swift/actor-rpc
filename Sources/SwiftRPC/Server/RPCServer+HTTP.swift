@@ -10,7 +10,9 @@ extension RPCServer {
     ///
     /// The request must be `application/json`, which a page on another origin can't send unless
     /// the host's CORS policy allows it.
-    public func respond(to request: HTTPRequest, body: [UInt8]) async -> (HTTPResponse, [UInt8]) {
+    ///
+    /// `body` is only borrowed, so a host can pass a view of its own buffer.
+    public func respond(to request: HTTPRequest, body: Span<UInt8>) async -> (HTTPResponse, [UInt8]) {
         guard request.method == .post else {
             return Self.response(RPCError(.invalidArgument, "Calls are POST requests."), status: .methodNotAllowed)
         }
@@ -20,7 +22,8 @@ extension RPCServer {
                 status: .unsupportedMediaType
             )
         }
-        guard let path = request.path, let call = RPCCall(path: path, basePath: basePath, body: body) else {
+        guard let path = request.path else { return Self.response(.malformedPath) }
+        guard let call = RPCCall(path: path.utf8Span, basePath: basePath, body: body) else {
             return Self.response(.malformedPath)
         }
         do {

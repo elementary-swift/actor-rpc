@@ -68,7 +68,7 @@ public struct RPCServer: Sendable {
             var decoder = try RPCInvocationDecoder(call, actorType: Act.self)
             try await system.executeDistributedTarget(
                 on: actor,
-                target: RemoteCallTarget("$s" + call.target),
+                target: RemoteCallTarget(runtimeName(call.target)),
                 invocationDecoder: &decoder,
                 handler: handler
             )
@@ -86,10 +86,18 @@ extension RPCClient {
     }
 }
 
+/// The standard runtime's name for a target, in one allocation.
+private func runtimeName(_ target: UTF8Span) -> String {
+    var name = "$s"
+    name.reserveCapacity(2 + target.count)
+    name.append(target)
+    return name
+}
+
 private struct InProcessTransport: RPCTransport {
     let server: RPCServer
 
-    func send(_ call: RPCCall) async throws -> [UInt8] {
+    func send(_ call: sending RPCCall) async throws -> [UInt8] {
         try await server.handle(call)
     }
 }

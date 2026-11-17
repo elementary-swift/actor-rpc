@@ -56,7 +56,7 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         throwing: Err.Type,
         returning: Res.Type
     ) async throws -> Res where Act.ID == ActorID {
-        let reply = try await send(invocation.makeCall(actorID: actor.id, target: target))
+        let reply = try await send(invocation, to: actor.id, target: target)
         do {
             return try decodeJSON(Res.self, from: reply.span.bytes)
         } catch {
@@ -70,12 +70,25 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         invocation: inout RPCInvocationEncoder,
         throwing: Err.Type
     ) async throws where Act.ID == ActorID {
-        _ = try await send(invocation.makeCall(actorID: actor.id, target: target))
+        _ = try await send(invocation, to: actor.id, target: target)
     }
 
-    private func send(_ call: RPCCall) async throws -> [UInt8] {
+    /// Sends the call with its target and arguments borrowed in place.
+    private func send(
+        _ invocation: borrowing RPCInvocationEncoder,
+        to actorID: RPCActorID,
+        target: RemoteCallTarget
+    ) async throws -> [UInt8] {
         // A server never resolves a remote actor, so it never gets here.
-        guard let transport else { throw RPCError.unknownActor(call.actorID) }
-        return try await transport.send(call)
+        guard let transport else { throw RPCError.unknownActor(actorID) }
+        // Drops the `$e` or `$s` prefix; see `RPCCall.target`.
+        #if hasFeature(Embedded)
+        // A mangled name is ASCII, so it is valid UTF-8 without checking.
+        let name = unsafe UTF8Span(unchecked: Span(viewing: target.identifier).extracting(droppingFirst: 2))
+        #else
+        let identifier = target.identifier
+        let name = try UTF8Span(validating: identifier.utf8Span.span.extracting(droppingFirst: 2))
+        #endif
+        return try await transport.send(RPCCall(actorID: actorID, target: name, body: invocation.arguments))
     }
 }
