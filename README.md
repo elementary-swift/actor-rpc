@@ -41,7 +41,9 @@ var server = RPCServer(basePath: "/rpc")
 server.serve(perCall: GreeterActor.init)
 
 // In the HTTP handler for POST /rpc/*:
-let (response, responseBody) = await server.respond(to: request, body: body)
+let response = await server.respond(to: request, body: body) { head, body in
+    // Build your framework's response from `head` and `body`.
+}
 ```
 
 `$Greeter` is the stub that `@Resolvable` generates for the protocol. `FetchExecutor` is in `SwiftRPCFetch`; outside the browser, give the transport your own `RPCHTTPExecutor`.

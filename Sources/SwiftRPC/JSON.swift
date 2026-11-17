@@ -1,11 +1,5 @@
 import NewCodable
 
-func encodeJSON(_ value: borrowing some JSONEncodable & ~Copyable) throws(CodingError.Encoding) -> [UInt8] {
-    try NewJSONEncoder().encode(value) { bytes throws(CodingError.Encoding) in
-        Array(copying: .init(viewing: bytes))
-    }
-}
-
 func decodeJSON<T: JSONDecodable>(_ type: T.Type, from bytes: RawSpan) throws(CodingError.Decoding) -> T {
     try NewJSONDecoder().decode(type, from: bytes)
 }

@@ -47,7 +47,15 @@ public struct RPCInvocationDecoder: DistributedTargetInvocationDecoder {
 public final class RPCResultHandler: DistributedTargetInvocationResultHandler {
     public typealias SerializationRequirement = JSONCodable
 
-    private(set) var result: Result<[UInt8], RPCError> = .failure(.opaque)
+    /// How a call ended. A result stays in the encoder's buffer until the server hands it out.
+    enum Outcome: ~Copyable {
+        // TODO: GrowableEncodingBytes is likely to leave NewCodable; switch to whatever owns the bytes then.
+        case value(GrowableEncodingBytes)
+        case void
+        case failure(RPCError)
+    }
+
+    private(set) var outcome: Outcome = .failure(.opaque)
     private let onError: (any Error) -> Void
 
     init(onError: @escaping (any Error) -> Void) {
@@ -55,17 +63,17 @@ public final class RPCResultHandler: DistributedTargetInvocationResultHandler {
     }
 
     public func onReturn<Success: JSONCodable>(value: Success) async throws {
-        result = .success(try encodeJSON(value))
+        outcome = .value(try NewJSONEncoder().encode(value))
     }
 
     public func onReturnVoid() async throws {
-        result = .success([])
+        outcome = .void
     }
 
     #if hasFeature(Embedded)
     // Embedded Swift only calls remote actors, so it never runs a call to report on.
     public func onThrow(error: any Error) async throws {
-        result = .failure(.opaque)
+        outcome = .failure(.opaque)
     }
     #else
     public func onThrow<Err: Error>(error: Err) async throws {
@@ -75,14 +83,14 @@ public final class RPCResultHandler: DistributedTargetInvocationResultHandler {
     func fail(with error: any Error) {
         switch error {
         case let error as any RPCErrorConvertible:
-            result = .failure(error.rpcError)
+            outcome = .failure(error.rpcError)
         case let error as ExecuteDistributedTargetError:
             // The runtime's message names its internals, so only `onError` sees it.
             onError(error)
-            result = .failure(error.errorCode == .targetAccessorNotFound ? .unknownMethod : .mismatchedCall)
+            outcome = .failure(error.errorCode == .targetAccessorNotFound ? .unknownMethod : .mismatchedCall)
         default:
             onError(error)
-            result = .failure(.opaque)
+            outcome = .failure(.opaque)
         }
     }
     #endif

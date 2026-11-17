@@ -123,7 +123,7 @@ private struct Loopback: RPCTransport {
 
     func send(_ call: sending RPCCall) async throws -> [UInt8] {
         try await CallNote.$current.withValue(note) {
-            try await server.handle(call)
+            try await server.handle(call) { Array(copying: $0) }
         }
     }
 }
@@ -138,7 +138,7 @@ private final class HTTPLoopback: RPCHTTPExecutor {
 
     func execute(_ request: HTTPRequest, body: Span<UInt8>) async throws -> (HTTPResponse, [UInt8]) {
         requests.withLock { $0.append(request) }
-        return await server.respond(to: request, body: body)
+        return await server.respond(to: request, body: body) { ($0, Array(copying: $1)) }
     }
 }
 
@@ -196,7 +196,9 @@ private func result(of call: RecordedCall, body: String) async -> Result<[UInt8]
     let body = Array(body.utf8)
     do throws(RPCError) {
         return .success(
-            try await noteServer().handle(RPCCall(actorID: call.actorID, target: call.target.utf8Span, body: body.span))
+            try await noteServer().handle(RPCCall(actorID: call.actorID, target: call.target.utf8Span, body: body.span)) {
+                Array(copying: $0)
+            }
         )
     } catch {
         return .failure(error)
@@ -212,7 +214,9 @@ private func post(
     var request = HTTPRequest(method: method, scheme: nil, authority: nil, path: path)
     request.headerFields[.contentType] = contentType
     let bytes = Array(body.utf8)
-    let (response, body) = await noteServer(basePath: "/rpc").respond(to: request, body: bytes.span)
+    let (response, body) = await noteServer(basePath: "/rpc").respond(to: request, body: bytes.span) {
+        ($0, Array(copying: $1))
+    }
     return (response, text(body))
 }
 
@@ -314,7 +318,7 @@ func stringsRoundTrip(text: String) async throws {
     call.target = call.target.replacing("4echo", with: "4ecko")
     await #expect(throws: RPCError.unknownMethod) {
         _ = try await noteServer { error in seen.withLock { $0.append("\(error)") } }
-            .handle(RPCCall(actorID: call.actorID, target: call.target.utf8Span, body: call.body.span))
+            .handle(RPCCall(actorID: call.actorID, target: call.target.utf8Span, body: call.body.span)) { _ in }
     }
     #expect(seen.withLock { $0.count } == 1)
 }

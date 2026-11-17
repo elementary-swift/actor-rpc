@@ -1,15 +1,18 @@
 #if !hasFeature(Embedded)
 
 public import Distributed
+import NewCodable
 
-/// Hosts services and answers calls to them. Plug ``respond(to:body:)`` into any HTTP server.
+/// Hosts services and answers calls to them. Plug ``respond(to:body:_:)`` into any HTTP server.
 ///
 /// ```swift
 /// var server = RPCServer(basePath: "/rpc")
 /// server.serve(perCall: GreeterActor.init)
 ///
 /// // In the HTTP handler for POST /rpc/*:
-/// let (response, body) = await server.respond(to: request, body: body)
+/// let response = await server.respond(to: request, body: body) { head, body in
+///     // Build the host's response type from `head` and `body`.
+/// }
 /// ```
 ///
 /// A call runs in the task that called `respond`, so task-locals the host binds (e.g. the
@@ -53,16 +56,23 @@ public struct RPCServer: Sendable {
         services[id] = service
     }
 
-    /// Runs a call and returns its result as JSON, or no bytes for `Void`.
-    public func handle(_ call: RPCCall) async throws(RPCError) -> [UInt8] {
+    /// Runs a call and lends its result to `reply` as JSON, or as no bytes for `Void`.
+    public func handle<Reply>(
+        _ call: RPCCall,
+        reply: (Span<UInt8>) -> Reply
+    ) async throws(RPCError) -> Reply {
         switch services[call.actorID] {
-        case .perCall(let make): try await run(call, on: make(system))
-        case .shared(let actor): try await run(call, on: actor)
+        case .perCall(let make): try await run(call, on: make(system), reply: reply)
+        case .shared(let actor): try await run(call, on: actor, reply: reply)
         case nil: throw .unknownActor(call.actorID)
         }
     }
 
-    private func run<Act: DistributedActor>(_ call: RPCCall, on actor: Act) async throws(RPCError) -> [UInt8] {
+    private func run<Act: DistributedActor, Reply>(
+        _ call: RPCCall,
+        on actor: Act,
+        reply: (Span<UInt8>) -> Reply
+    ) async throws(RPCError) -> Reply {
         let handler = RPCResultHandler(onError: onError)
         do {
             var decoder = try RPCInvocationDecoder(call, actorType: Act.self)
@@ -75,7 +85,11 @@ public struct RPCServer: Sendable {
         } catch {
             handler.fail(with: error)
         }
-        return try handler.result.get()
+        switch handler.outcome {
+        case .value(let result): return reply(result.span)
+        case .void: return reply(Span())
+        case .failure(let error): throw error
+        }
     }
 }
 
@@ -98,7 +112,7 @@ private struct InProcessTransport: RPCTransport {
     let server: RPCServer
 
     func send(_ call: sending RPCCall) async throws -> [UInt8] {
-        try await server.handle(call)
+        try await server.handle(call) { Array(copying: $0) }
     }
 }
 

@@ -1,6 +1,7 @@
 #if !hasFeature(Embedded)
 
 public import HTTPTypes
+import NewCodable
 
 extension RPCServer {
     /// Answers a `POST` to `<basePath>/<serviceName>/<target>`.
@@ -11,39 +12,54 @@ extension RPCServer {
     /// The request must be `application/json`, which a page on another origin can't send unless
     /// the host's CORS policy allows it.
     ///
-    /// `body` is only borrowed, so a host can pass a view of its own buffer.
-    public func respond(to request: HTTPRequest, body: Span<UInt8>) async -> (HTTPResponse, [UInt8]) {
+    /// Both bodies are only borrowed: a host passes a view of its own request buffer, and builds
+    /// its response type from the result in `makeResponse`.
+    public func respond<Response>(
+        to request: HTTPRequest,
+        body: Span<UInt8>,
+        _ makeResponse: (HTTPResponse, Span<UInt8>) -> Response
+    ) async -> Response {
         guard request.method == .post else {
-            return Self.response(RPCError(.invalidArgument, "Calls are POST requests."), status: .methodNotAllowed)
-        }
-        guard request.headerFields[.contentType]?.lowercased().hasPrefix("application/json") == true else {
-            return Self.response(
-                RPCError(.invalidArgument, "Calls are application/json."),
-                status: .unsupportedMediaType
+            return Self.respond(
+                RPCError(.invalidArgument, "Calls are POST requests."),
+                status: .methodNotAllowed,
+                makeResponse
             )
         }
-        guard let path = request.path else { return Self.response(.malformedPath) }
+        guard request.headerFields[.contentType]?.lowercased().hasPrefix("application/json") == true else {
+            return Self.respond(
+                RPCError(.invalidArgument, "Calls are application/json."),
+                status: .unsupportedMediaType,
+                makeResponse
+            )
+        }
+        guard let path = request.path else { return Self.respond(.malformedPath, makeResponse) }
         guard let call = RPCCall(path: path.utf8Span, basePath: basePath, body: body) else {
-            return Self.response(.malformedPath)
+            return Self.respond(.malformedPath, makeResponse)
         }
         do {
-            let result = try await handle(call)
-            if result.isEmpty { return (HTTPResponse(status: .noContent), []) }
-            return (HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), result)
+            return try await handle(call) { result in
+                if result.isEmpty { return makeResponse(HTTPResponse(status: .noContent), result) }
+                return makeResponse(HTTPResponse(status: .ok, headerFields: [.contentType: "application/json"]), result)
+            }
         } catch {
-            return Self.response(error)
+            return Self.respond(error, makeResponse)
         }
     }
 
-    private static func response(
+    private static func respond<Response>(
         _ error: RPCError,
-        status: HTTPResponse.Status? = nil
-    ) -> (HTTPResponse, [UInt8]) {
-        (
-            HTTPResponse(status: status ?? error.code.status, headerFields: [.contentType: "application/json"]),
-            // Two strings always encode.
-            try! encodeJSON(RPCErrorBody(code: error.code.rawValue, message: error.message))
+        status: HTTPResponse.Status? = nil,
+        _ makeResponse: (HTTPResponse, Span<UInt8>) -> Response
+    ) -> Response {
+        let response = HTTPResponse(
+            status: status ?? error.code.status,
+            headerFields: [.contentType: "application/json"]
         )
+        // Two strings always encode.
+        return try! NewJSONEncoder().encode(RPCErrorBody(code: error.code.rawValue, message: error.message)) {
+            makeResponse(response, Span(viewing: $0))
+        }
     }
 }
 
