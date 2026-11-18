@@ -121,9 +121,9 @@ private struct Loopback: RPCTransport {
     let server: RPCServer
     var note: String?
 
-    func send(_ call: sending RPCCall, reply: (Span<UInt8>) throws -> Void) async throws {
+    func send(_ call: sending RPCCall, reply: (Span<UInt8>) -> Void) async throws {
         try await CallNote.$current.withValue(note) {
-            try await server.handle(call) { result in Result { try reply(result) } }.get()
+            try await server.handle(call, reply: reply)
         }
     }
 }
@@ -136,13 +136,13 @@ private final class HTTPLoopback: RPCHTTPExecutor {
         self.server = server
     }
 
-    func execute(
+    func execute<Response>(
         _ request: HTTPRequest,
         body: Span<UInt8>,
-        response: (HTTPResponse, Span<UInt8>) throws -> Void
-    ) async throws {
+        response: (HTTPResponse, Span<UInt8>) -> Response
+    ) async -> Response {
         requests.withLock { $0.append(request) }
-        try await server.respond(to: request, body: body) { head, body in Result { try response(head, body) } }.get()
+        return await server.respond(to: request, body: body, response)
     }
 }
 
@@ -158,9 +158,9 @@ private struct RecordedCall {
 private actor Recorder: RPCTransport {
     private(set) var calls: [RecordedCall] = []
 
-    nonisolated func send(_ call: sending RPCCall, reply: (Span<UInt8>) throws -> Void) async throws {
+    nonisolated func send(_ call: sending RPCCall, reply: (Span<UInt8>) -> Void) async {
         await record(RecordedCall(actorID: call.actorID, target: String(copying: call.target), body: Array(copying: call.body)))
-        try reply(Array(#""reply""#.utf8).span)
+        reply(Array(#""reply""#.utf8).span)
     }
 
     private func record(_ call: RecordedCall) {
@@ -172,12 +172,12 @@ private struct StaticHTTPExecutor: RPCHTTPExecutor {
     var status: HTTPResponse.Status
     var body: String
 
-    func execute(
+    func execute<Response>(
         _ request: HTTPRequest,
         body _: Span<UInt8>,
-        response: (HTTPResponse, Span<UInt8>) throws -> Void
-    ) throws {
-        try response(HTTPResponse(status: status), body.utf8Span.span)
+        response: (HTTPResponse, Span<UInt8>) -> Response
+    ) -> Response {
+        response(HTTPResponse(status: status), body.utf8Span.span)
     }
 }
 

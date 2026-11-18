@@ -69,5 +69,6 @@ extension RPCError {
     static let unsupportedTarget = Self(.unimplemented, "The target is not a method of a @Resolvable protocol.")
     static let genericMethod = Self(.unimplemented, "Generic distributed methods are not supported.")
     static let malformedResponse = Self(.internalError, "The response does not decode as the return type.")
+    static let missingReply = Self(.internalError, "The transport finished the call without a reply.")
     static let opaque = Self(.internalError, "Internal error.")
 }

@@ -111,8 +111,8 @@ private func runtimeName(_ target: UTF8Span) -> String {
 private struct InProcessTransport: RPCTransport {
     let server: RPCServer
 
-    func send(_ call: sending RPCCall, reply: (Span<UInt8>) throws -> Void) async throws {
-        try await server.handle(call) { result in Result { try reply(result) } }.get()
+    func send(_ call: sending RPCCall, reply: (Span<UInt8>) -> Void) async throws {
+        try await server.handle(call, reply: reply)
     }
 }
 

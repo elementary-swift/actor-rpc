@@ -5,13 +5,13 @@ import NewCodable
 public protocol RPCHTTPExecutor: Sendable {
     /// `request` has no scheme or authority; the executor sends it to its server.
     ///
-    /// `body` and the body lent to `response` are borrowed; copy them to keep them. Calls
-    /// `response` once the response arrives and rethrows what it throws.
-    func execute(
+    /// `body` and the body lent to `response` are borrowed; copy them to keep them. Returns what
+    /// `response` makes of the response once it arrives.
+    func execute<Response>(
         _ request: HTTPRequest,
         body: Span<UInt8>,
-        response: (HTTPResponse, Span<UInt8>) throws -> Void
-    ) async throws
+        response: (HTTPResponse, Span<UInt8>) -> Response
+    ) async throws -> Response
 }
 
 /// Delivers calls over HTTP: `POST <basePath>/<serviceName>/<target>`, with the JSON array of the
@@ -43,7 +43,7 @@ public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
         self.options = options
     }
 
-    public func send(_ call: sending RPCCall, reply: (Span<UInt8>) throws -> Void) async throws {
+    public func send(_ call: sending RPCCall, reply: (Span<UInt8>) -> Void) async throws {
         var headerFields = HTTPFields([
             HTTPField(name: .contentType, value: "application/json")
         ])
@@ -57,16 +57,24 @@ public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
             path: options.basePath + call.path,
             headerFields: headerFields
         )
-        try await executor.execute(request, body: call.body) { response, body in
-            guard response.status.kind == .successful else {
-                if let failure = try? decodeJSON(RPCErrorBody.self, from: body.bytes) {
-                    throw RPCError(RPCError.Code(rawValue: failure.code), failure.message)
-                }
-                // Not from an RPCServer, e.g. a proxy's error page.
-                let page = try? String(copying: UTF8Span(validating: body))
-                throw RPCError(RPCError.Code(response.status), page ?? "")
-            }
-            try reply(body)
+        let failure = try await executor.execute(request, body: call.body) { response, body -> RPCError? in
+            guard response.status.kind == .successful else { return RPCError(response.status, body: body) }
+            reply(body)
+            return nil
+        }
+        if let failure { throw failure }
+    }
+}
+
+extension RPCError {
+    /// The error a failed response carries.
+    fileprivate init(_ status: HTTPResponse.Status, body: Span<UInt8>) {
+        if let failure = try? decodeJSON(RPCErrorBody.self, from: body.bytes) {
+            self.init(Code(rawValue: failure.code), failure.message)
+        } else {
+            // Not from an RPCServer, e.g. a proxy's error page.
+            let page = try? String(copying: UTF8Span(validating: body))
+            self.init(Code(status), page ?? "")
         }
     }
 }

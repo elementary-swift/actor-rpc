@@ -18,11 +18,11 @@ public struct FetchExecutor: RPCHTTPExecutor {
         self.origin = origin
     }
 
-    public func execute(
+    public func execute<Response>(
         _ request: HTTPRequest,
         body: Span<UInt8>,
-        response: (HTTPResponse, Span<UInt8>) throws -> Void
-    ) async throws {
+        response: (HTTPResponse, Span<UInt8>) -> Response
+    ) async throws -> Response {
         let headers = try Headers()
         for field in request.headerFields {
             try headers.append(field.name.rawName, field.value)
@@ -32,7 +32,7 @@ public struct FetchExecutor: RPCHTTPExecutor {
             RequestInit(method: request.method.rawValue, headers: headers, body: JSTypedArray(copying: body))
         )
         let bytes = Array(try await fetched.bytes())
-        try response(HTTPResponse(status: HTTPResponse.Status(code: try fetched.status)), bytes.span)
+        return response(HTTPResponse(status: HTTPResponse.Status(code: try fetched.status)), bytes.span)
     }
 }
 

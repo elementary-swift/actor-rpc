@@ -56,13 +56,11 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         throwing: Err.Type,
         returning: Res.Type
     ) async throws -> Res where Act.ID == ActorID {
-        try await send(invocation, to: actor.id, target: target) { reply in
-            do {
-                return try decodeJSON(Res.self, from: reply.bytes)
-            } catch {
-                throw RPCError.malformedResponse
-            }
+        let result = try await send(invocation, to: actor.id, target: target) { reply in
+            try? decodeJSON(Res.self, from: reply.bytes)
         }
+        guard let result else { throw RPCError.malformedResponse }
+        return result
     }
 
     public func remoteCallVoid<Act: DistributedActor, Err: Error>(
@@ -79,7 +77,7 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         _ invocation: borrowing RPCInvocationEncoder,
         to actorID: RPCActorID,
         target: RemoteCallTarget,
-        reply: (Span<UInt8>) throws -> Reply
+        reply: (Span<UInt8>) -> Reply
     ) async throws -> Reply {
         // A server never resolves a remote actor, so it never gets here.
         guard let transport else { throw RPCError.unknownActor(actorID) }
@@ -95,9 +93,9 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         // transport's reply returns nothing and the result comes out here.
         var result: Reply?
         try await transport.send(RPCCall(actorID: actorID, target: name, body: invocation.arguments)) {
-            result = try reply($0)
+            result = reply($0)
         }
-        guard let result else { throw RPCError.malformedResponse }
+        guard let result else { throw RPCError.missingReply }
         return result
     }
 }
