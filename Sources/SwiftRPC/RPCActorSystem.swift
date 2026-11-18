@@ -56,11 +56,12 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         throwing: Err.Type,
         returning: Res.Type
     ) async throws -> Res where Act.ID == ActorID {
-        let reply = try await send(invocation, to: actor.id, target: target)
-        do {
-            return try decodeJSON(Res.self, from: reply.span.bytes)
-        } catch {
-            throw RPCError.malformedResponse
+        try await send(invocation, to: actor.id, target: target) { reply in
+            do {
+                return try decodeJSON(Res.self, from: reply.bytes)
+            } catch {
+                throw RPCError.malformedResponse
+            }
         }
     }
 
@@ -70,15 +71,16 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         invocation: inout RPCInvocationEncoder,
         throwing: Err.Type
     ) async throws where Act.ID == ActorID {
-        _ = try await send(invocation, to: actor.id, target: target)
+        try await send(invocation, to: actor.id, target: target) { _ in }
     }
 
     /// Sends the call with its target and arguments borrowed in place.
-    private func send(
+    private func send<Reply>(
         _ invocation: borrowing RPCInvocationEncoder,
         to actorID: RPCActorID,
-        target: RemoteCallTarget
-    ) async throws -> [UInt8] {
+        target: RemoteCallTarget,
+        reply: (Span<UInt8>) throws -> Reply
+    ) async throws -> Reply {
         // A server never resolves a remote actor, so it never gets here.
         guard let transport else { throw RPCError.unknownActor(actorID) }
         // Drops the `$e` or `$s` prefix; see `RPCCall.target`.
@@ -89,6 +91,13 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         let identifier = target.identifier
         let name = try UTF8Span(validating: identifier.utf8Span.span.extracting(droppingFirst: 2))
         #endif
-        return try await transport.send(RPCCall(actorID: actorID, target: name, body: invocation.arguments))
+        // Embedded can't specialize a generic method called through `any RPCTransport`, so the
+        // transport's reply returns nothing and the result comes out here.
+        var result: Reply?
+        try await transport.send(RPCCall(actorID: actorID, target: name, body: invocation.arguments)) {
+            result = try reply($0)
+        }
+        guard let result else { throw RPCError.malformedResponse }
+        return result
     }
 }

@@ -5,8 +5,13 @@ import NewCodable
 public protocol RPCHTTPExecutor: Sendable {
     /// `request` has no scheme or authority; the executor sends it to its server.
     ///
-    /// `body` is borrowed for the duration of the call; copy it to keep it.
-    func execute(_ request: HTTPRequest, body: Span<UInt8>) async throws -> (HTTPResponse, [UInt8])
+    /// `body` and the body lent to `response` are borrowed; copy them to keep them. Calls
+    /// `response` once the response arrives and rethrows what it throws.
+    func execute(
+        _ request: HTTPRequest,
+        body: Span<UInt8>,
+        response: (HTTPResponse, Span<UInt8>) throws -> Void
+    ) async throws
 }
 
 /// Delivers calls over HTTP: `POST <basePath>/<serviceName>/<target>`, with the JSON array of the
@@ -38,7 +43,7 @@ public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
         self.options = options
     }
 
-    public func send(_ call: sending RPCCall) async throws -> [UInt8] {
+    public func send(_ call: sending RPCCall, reply: (Span<UInt8>) throws -> Void) async throws {
         var headerFields = HTTPFields([
             HTTPField(name: .contentType, value: "application/json")
         ])
@@ -52,14 +57,16 @@ public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
             path: options.basePath + call.path,
             headerFields: headerFields
         )
-        let (response, body) = try await executor.execute(request, body: call.body)
-        guard response.status.kind == .successful else {
-            if let failure = try? decodeJSON(RPCErrorBody.self, from: body.span.bytes) {
-                throw RPCError(RPCError.Code(rawValue: failure.code), failure.message)
+        try await executor.execute(request, body: call.body) { response, body in
+            guard response.status.kind == .successful else {
+                if let failure = try? decodeJSON(RPCErrorBody.self, from: body.bytes) {
+                    throw RPCError(RPCError.Code(rawValue: failure.code), failure.message)
+                }
+                // Not from an RPCServer, e.g. a proxy's error page.
+                let page = try? String(copying: UTF8Span(validating: body))
+                throw RPCError(RPCError.Code(response.status), page ?? "")
             }
-            // Not from an RPCServer, e.g. a proxy's error page.
-            throw RPCError(RPCError.Code(response.status), String(decoding: body, as: UTF8.self))
+            try reply(body)
         }
-        return body
     }
 }

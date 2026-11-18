@@ -121,9 +121,9 @@ private struct Loopback: RPCTransport {
     let server: RPCServer
     var note: String?
 
-    func send(_ call: sending RPCCall) async throws -> [UInt8] {
+    func send(_ call: sending RPCCall, reply: (Span<UInt8>) throws -> Void) async throws {
         try await CallNote.$current.withValue(note) {
-            try await server.handle(call) { Array(copying: $0) }
+            try await server.handle(call) { result in Result { try reply(result) } }.get()
         }
     }
 }
@@ -136,9 +136,13 @@ private final class HTTPLoopback: RPCHTTPExecutor {
         self.server = server
     }
 
-    func execute(_ request: HTTPRequest, body: Span<UInt8>) async throws -> (HTTPResponse, [UInt8]) {
+    func execute(
+        _ request: HTTPRequest,
+        body: Span<UInt8>,
+        response: (HTTPResponse, Span<UInt8>) throws -> Void
+    ) async throws {
         requests.withLock { $0.append(request) }
-        return await server.respond(to: request, body: body) { ($0, Array(copying: $1)) }
+        try await server.respond(to: request, body: body) { head, body in Result { try response(head, body) } }.get()
     }
 }
 
@@ -154,9 +158,13 @@ private struct RecordedCall {
 private actor Recorder: RPCTransport {
     private(set) var calls: [RecordedCall] = []
 
-    func send(_ call: sending RPCCall) -> [UInt8] {
-        calls.append(RecordedCall(actorID: call.actorID, target: String(copying: call.target), body: Array(copying: call.body)))
-        return Array(#""reply""#.utf8)
+    nonisolated func send(_ call: sending RPCCall, reply: (Span<UInt8>) throws -> Void) async throws {
+        await record(RecordedCall(actorID: call.actorID, target: String(copying: call.target), body: Array(copying: call.body)))
+        try reply(Array(#""reply""#.utf8).span)
+    }
+
+    private func record(_ call: RecordedCall) {
+        calls.append(call)
     }
 }
 
@@ -164,8 +172,12 @@ private struct StaticHTTPExecutor: RPCHTTPExecutor {
     var status: HTTPResponse.Status
     var body: String
 
-    func execute(_ request: HTTPRequest, body _: Span<UInt8>) -> (HTTPResponse, [UInt8]) {
-        (HTTPResponse(status: status), Array(body.utf8))
+    func execute(
+        _ request: HTTPRequest,
+        body _: Span<UInt8>,
+        response: (HTTPResponse, Span<UInt8>) throws -> Void
+    ) throws {
+        try response(HTTPResponse(status: status), body.utf8Span.span)
     }
 }
 
