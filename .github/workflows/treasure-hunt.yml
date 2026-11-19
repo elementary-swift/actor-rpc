@@ -1,0 +1,123 @@
+name: Deploy TreasureHunt
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Sources/**
+      - Package.swift
+      - Examples/TreasureHunt/**
+      - .github/workflows/treasure-hunt.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: treasure-hunt
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: Examples/TreasureHunt
+
+env:
+  # Bump together with .swift-version.
+  SWIFT_TOOLCHAIN: main-snapshot-2026-11-01
+  WASM_SDK_URL: https://download.swift.org/development/wasm-sdk/swift-DEVELOPMENT-SNAPSHOT-2026-11-01-a/swift-DEVELOPMENT-SNAPSHOT-2026-11-01-a_wasm.artifactbundle.tar.gz
+  WASM_SDK_CHECKSUM: 66293bcf3599e2525376c6be195dbacfb4729df9ef5ab3cd6fd260d787a184e4
+  DOMAIN_NAME: treasure-hunt.examples.elementary.codes
+
+jobs:
+  lambda:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build
+        run: npm run build:lambda
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: lambda
+          path: Examples/TreasureHunt/.build/lambda/bootstrap
+          if-no-files-found: error
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: vapor/swiftly-action@bedb227456c5f495afbef80baebee17a8a02cef4 # v0.2.1
+        with:
+          toolchain: ${{ env.SWIFT_TOOLCHAIN }}
+      - name: Install Swift WASM SDK
+        run: swift sdk install "$WASM_SDK_URL" --checksum "$WASM_SDK_CHECKSUM"
+      - uses: phi-ag/setup-binaryen@669f9ccf7c6f8dfeb464af89d27d55a0659b1de7 # v1.0.12
+        with:
+          version: "123"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Examples/TreasureHunt/package-lock.json
+      - name: Install dependencies
+        run: swift package resolve && npm ci
+      - name: Build
+        run: npm run build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web
+          path: Examples/TreasureHunt/dist
+          if-no-files-found: error
+
+  deploy:
+    needs: [lambda, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: lambda
+          path: Examples/TreasureHunt/.build/lambda
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web
+          path: Examples/TreasureHunt/dist
+      - uses: aws-actions/setup-sam@341eee193f458fa5aae5d52c94b0c5cf3a1c5a52 # v3
+        with:
+          use-installer: true
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Deploy stack
+        run: |
+          chmod +x .build/lambda/bootstrap
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --s3-bucket "${{ vars.SAM_ARTIFACTS_BUCKET }}" \
+            --role-arn "${{ vars.AWS_CFN_ROLE_ARN }}" \
+            --parameter-overrides \
+              "DomainName=$DOMAIN_NAME" \
+              "CertificateArn=${{ vars.CERTIFICATE_ARN }}" \
+              "PipelineRoleName=${{ vars.AWS_PIPELINE_ROLE_NAME }}"
+      - name: Upload site
+        run: |
+          output() {
+            aws cloudformation describe-stacks --stack-name elementary-treasure-hunt \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
+          }
+          bucket="s3://$(output SiteBucket)"
+          # Hashed assets never change; old ones stay for pages still holding the previous index.html.
+          aws s3 sync dist/assets "$bucket/assets" --exclude "*.wasm" \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync dist/assets "$bucket/assets" --exclude "*" --include "*.wasm" \
+            --content-type application/wasm --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync dist "$bucket" --exclude "assets/*" --delete --cache-control "no-cache"
+          aws cloudfront create-invalidation --distribution-id "$(output DistributionId)" --paths "/index.html" "/"
+          echo "Deployed to $(output Url)" >> "$GITHUB_STEP_SUMMARY"

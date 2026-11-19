@@ -1,0 +1,5 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "elementary-treasure-hunt"
+capabilities = "CAPABILITY_IAM"
