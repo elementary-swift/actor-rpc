@@ -48,4 +48,4 @@ let response = await server.respond(to: request, body: body) { head, body in
 
 `$Greeter` is the stub that `@Resolvable` generates for the protocol. `FetchExecutor` is in `SwiftRPCFetch`; outside the browser, give the transport your own `RPCHTTPExecutor`.
 
-Requires Swift 6.5 and the `experimental/new-codable` branch of swift-foundation.
+Requires a Swift main snapshot and the `experimental/new-codable` branch of swift-foundation.

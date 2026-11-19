@@ -8,7 +8,7 @@ let package = Package(
         .package(name: "swift-rpc", path: "../.."),
         .package(url: "https://github.com/elementary-swift/elementary-ui.git", from: "0.9.0"),
         .package(url: "https://github.com/elementary-swift/elementary-flow.git", from: "0.1.0"),
-        .package(url: "https://github.com/swiftwasm/JavaScriptKit.git", from: "0.58.0"),
+        .package(url: "https://github.com/swiftwasm/JavaScriptKit.git", from: "0.62.0"),
         .package(
             url: "https://github.com/sliemeobn/swift-foundation.git",
             branch: "experimental/new-codable"

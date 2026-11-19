@@ -14,7 +14,7 @@ let package = Package(
             branch: "experimental/new-codable"
         ),
         .package(url: "https://github.com/apple/swift-http-types.git", from: "1.8.0", traits: []),
-        .package(url: "https://github.com/swiftwasm/JavaScriptKit.git", from: "0.58.0"),
+        .package(url: "https://github.com/swiftwasm/JavaScriptKit.git", from: "0.62.0"),
     ],
     targets: [
         .target(
