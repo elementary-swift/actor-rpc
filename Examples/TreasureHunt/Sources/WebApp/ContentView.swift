@@ -5,6 +5,7 @@ import Shared
 @View
 struct ContentView {
     let hunt: any TreasureHunt
+    var mapSize = 10
 
     @State var game: Game?
     /// Steps to the treasure from each cell dug so far.
@@ -17,14 +18,7 @@ struct ContentView {
         FlexColumn {
             Block(maxWidth: 760) {
                 FlexColumn(gap: 32) {
-                    FlexColumn {
-                        Paragraph("ElementaryUI × AWS Lambda")
-                            .style(contentsOf: Theme.kicker)
-                        Heading("Treasure hunt")
-                            .style(contentsOf: Theme.title)
-                        Paragraph("Every game hides one treasure. Only the Swift actor on Lambda knows where.")
-                            .style(contentsOf: Theme.lede)
-                    }
+                    IntroView()
 
                     Block {
                         Paragraph(game?.name ?? "New game")
@@ -32,50 +26,14 @@ struct ContentView {
                         Heading(note, tag: HTMLTag.h2.self)
                             .style(contentsOf: Theme.status)
 
-                        FlexRow(gap: 4, wrap: .wrap) {
-                            for cell in Cell.all {
-                                Square(
-                                    text: text(cell),
-                                    fill: fill(cell),
-                                    enabled: canDig(cell),
-                                    onDig: { dig(cell) }
-                                )
-                            }
-                        }
-                        .style(contentsOf: Theme.map)
+                        MapView(size: mapSize, dug: dug, revealed: revealed, canDig: isPlaying) { dig($0) }
 
-                        button(.type(.button)) { "New game" }
-                            .attributes(.disabled, when: isBusy)
-                            .onClick { startOver() }
-                            .style(contentsOf: Theme.action)
-                            .style(when: .hover, contentsOf: Theme.actionHover)
-                            .style(when: .disabled, contentsOf: Theme.actionDisabled)
-
-                        button(.type(.button)) { "Give up" }
-                            .attributes(.disabled, when: !isPlaying)
-                            .onClick { giveUp() }
-                            .style(contentsOf: Theme.secondaryAction)
-                            .style(when: .hover, contentsOf: Theme.secondaryActionHover)
-                            .style(when: .disabled, contentsOf: Theme.secondaryActionDisabled)
+                        Button(title: "New game", style: Theme.action, enabled: !isBusy) { startOver() }
+                        Button(title: "Give up", style: Theme.secondaryAction, enabled: isPlaying) { giveUp() }
                     }
                     .style(contentsOf: Theme.card)
 
-                    Paragraph {
-                        "Demo of "
-                        a(.href("https://elementary.codes")) { "ElementaryUI" }
-                            .style(contentsOf: Theme.link)
-                        " and Swift "
-                        a(.href("https://www.swift.org/blog/distributed-actors/")) {
-                            "distributed actors"
-                        }
-                        .style(contentsOf: Theme.link)
-                        ". The page calls "
-                        code { "try await hunt.probe(cell, in: game)" }
-                        ", which posts JSON to an AWS Lambda function hosting the actor. "
-                        "The server works out the treasure from the game's name and a secret, "
-                        "so it stores nothing and the page can't peek."
-                    }
-                    .style(contentsOf: Theme.footer)
+                    FooterView()
                 }
             }
             .style(contentsOf: Theme.page)
@@ -84,28 +42,8 @@ struct ContentView {
         .task { await newGame() }
     }
 
-    private var isFound: Bool {
-        dug.values.contains(0)
-    }
-
     private var isPlaying: Bool {
-        !isBusy && game != nil && !isFound && revealed == nil
-    }
-
-    private func text(_ cell: Cell) -> String {
-        if dug[cell] == 0 || revealed == cell { return "★" }
-        return dug[cell].map { String($0) } ?? ""
-    }
-
-    private func fill(_ cell: Cell) -> CSSColor {
-        if dug[cell] == 0 || revealed == cell { return Theme.gold }
-        guard let steps = dug[cell] else { return Theme.squareFill }
-        // Red when close, blue when far.
-        return "hsl(\(min(steps - 1, 17) * 13) 80% 64%)"
-    }
-
-    private func canDig(_ cell: Cell) -> Bool {
-        isPlaying && dug[cell] == nil
+        !isBusy && game != nil && !dug.values.contains(0) && revealed == nil
     }
 
     private func startOver() {
@@ -117,7 +55,7 @@ struct ContentView {
             game = nil
             dug = [:]
             revealed = nil
-            game = try await hunt.newGame()
+            game = try await hunt.newGame(size: mapSize)
             note = "Dig anywhere."
         }
     }
@@ -126,7 +64,7 @@ struct ContentView {
         guard let game else { return }
         Task {
             await perform {
-                switch try await hunt.probe(cell, in: game) {
+                switch try await hunt.dig(cell, in: game) {
                 case .found:
                     dug[cell] = 0
                     note = "Found it in \(dug.count) \(dug.count == 1 ? "dig" : "digs")."
@@ -160,6 +98,61 @@ struct ContentView {
 }
 
 @View
+private struct IntroView {
+    var body: some View {
+        FlexColumn {
+            Paragraph("ElementaryUI × AWS Lambda")
+                .style(contentsOf: Theme.kicker)
+            Heading("Treasure hunt")
+                .style(contentsOf: Theme.title)
+            Paragraph("Every game hides one treasure. Only the Swift actor on Lambda knows where.")
+                .style(contentsOf: Theme.lede)
+        }
+    }
+}
+
+/// The squares, with what each dig turned up.
+@View
+private struct MapView {
+    var size: Int
+    /// Steps to the treasure from each cell dug so far.
+    var dug: [Cell: Int]
+    var revealed: Cell?
+    var canDig: Bool
+    var onDig: (Cell) -> Void
+
+    var body: some View {
+        FlexColumn(gap: 4) {
+            for row in 0..<size {
+                FlexRow(gap: 4) {
+                    for column in 0..<size {
+                        let cell = Cell(row: row, column: column)
+                        Square(
+                            text: text(cell),
+                            fill: fill(cell),
+                            enabled: canDig && dug[cell] == nil,
+                            onDig: { onDig(cell) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private func text(_ cell: Cell) -> String {
+        if dug[cell] == 0 || revealed == cell { return "★" }
+        return dug[cell].map { String($0) } ?? ""
+    }
+
+    private func fill(_ cell: Cell) -> CSSColor {
+        if dug[cell] == 0 || revealed == cell { return Theme.gold }
+        guard let steps = dug[cell] else { return Theme.squareFill }
+        // Red when close, blue when far.
+        return "hsl(\(min(steps - 1, 17) * 13) 80% 64%)"
+    }
+}
+
+@View
 private struct Square {
     var text: String
     var fill: CSSColor
@@ -174,5 +167,44 @@ private struct Square {
             .style(.background(fill))
             .style(when: .hover, contentsOf: Theme.squareHover)
             .style(when: .disabled, contentsOf: Theme.squareDisabled)
+    }
+}
+
+@View
+private struct FooterView {
+    var body: some View {
+        Paragraph {
+            "Demo of "
+            a(.href("https://elementary.codes")) { "ElementaryUI" }
+                .style(contentsOf: Theme.link)
+            " and Swift "
+            a(.href("https://www.swift.org/blog/distributed-actors/")) {
+                "distributed actors"
+            }
+            .style(contentsOf: Theme.link)
+            ". The page calls "
+            code { "try await hunt.dig(cell, in: game)" }
+            ", which posts JSON to an AWS Lambda function hosting the actor. "
+            "The server works out the treasure from the game's name and a secret, "
+            "so it stores nothing and the page can't peek."
+        }
+        .style(contentsOf: Theme.footer)
+    }
+}
+
+@View
+private struct Button {
+    var title: String
+    var style: Theme.ButtonStyle
+    var enabled: Bool
+    var action: () -> Void
+
+    var body: some View {
+        button(.type(.button)) { title }
+            .attributes(.disabled, when: !enabled)
+            .onClick { action() }
+            .style(contentsOf: style.base)
+            .style(when: .hover, contentsOf: style.hover)
+            .style(when: .disabled, contentsOf: style.disabled)
     }
 }

@@ -4,16 +4,19 @@ import SwiftRPC
 
 /// The hunt. The actor stores nothing: a game's treasure follows from its name.
 distributed actor TreasureHuntActor: TreasureHunt {
+    private static let sizes = 2...16
 
-    distributed func newGame() -> Game {
-        Game(name: "\(adjectives.randomElement()!) \(nouns.randomElement()!)")
+    distributed func newGame(size: Int) throws -> Game {
+        let game = Game(name: "\(adjectives.randomElement()!) \(nouns.randomElement()!)", size: size)
+        try Self.check(game)
+        return game
     }
 
-    distributed func probe(_ cell: Cell, in game: Game) throws -> Probe {
-        guard Self.isOnMap(cell) else {
+    distributed func dig(_ cell: Cell, in game: Game) throws -> DigResult {
+        let treasure = try Self.treasure(of: game)
+        guard (0..<game.size).contains(cell.row), (0..<game.size).contains(cell.column) else {
             throw HuntError("That square is off the map.")
         }
-        let treasure = try Self.treasure(of: game)
         let steps = abs(cell.row - treasure.row) + abs(cell.column - treasure.column)
         return steps == 0 ? .found : .away(steps: steps)
     }
@@ -23,19 +26,23 @@ distributed actor TreasureHuntActor: TreasureHunt {
     }
 
     private static func treasure(of game: Game) throws -> Cell {
+        try check(game)
+        let spot = Int(fnv1a(salt + game.name) % UInt64(game.size * game.size))
+        return Cell(row: spot / game.size, column: spot % game.size)
+    }
+
+    /// The page sends the game back with every call, so it may have been tampered with.
+    private static func check(_ game: Game) throws {
         guard !game.name.isEmpty else {
             throw HuntError("The game has no name.")
         }
-        let spot = Int(fnv1a(salt + game.name) % UInt64(Cell.size * Cell.size))
-        return Cell(row: spot / Cell.size, column: spot % Cell.size)
-    }
-
-    private static func isOnMap(_ cell: Cell) -> Bool {
-        (0..<Cell.size).contains(cell.row) && (0..<Cell.size).contains(cell.column)
+        guard sizes.contains(game.size) else {
+            throw HuntError("A map is \(sizes.lowerBound) to \(sizes.upperBound) squares across.")
+        }
     }
 }
 
-/// A probe the rules don't allow. Its message reaches the page.
+/// A dig the rules don't allow. Its message reaches the page.
 struct HuntError: RPCErrorConvertible, CustomStringConvertible {
     var description: String
 

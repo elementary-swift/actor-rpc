@@ -69,11 +69,6 @@ enum Theme {
         .letterSpacing(.em(-0.015)),
     ]
 
-    /// Ten 32px squares plus the nine gaps between them.
-    static let map: [ElementaryStyle] = [
-        .width(356)
-    ]
-
     static let square: [ElementaryStyle] = [
         .width(32),
         .height(32),
@@ -98,53 +93,48 @@ enum Theme {
         .cursor(.default),
     ]
 
-    static let action: [ElementaryStyle] = [
-        .margin(t: 16),
-        .padding(y: 9, x: 14),
-        .minHeight(40),
-        .borderWidth(0),
-        .borderRadius(9),
-        .background(blue),
-        .color(.white),
-        .fontFamily(font),
-        .fontWeight(650),
-        .cursor(.pointer),
-    ]
+    /// A button's look at rest, on hover and when disabled.
+    struct ButtonStyle {
+        var base: [ElementaryStyle]
+        var hover: [ElementaryStyle]
+        var disabled: [ElementaryStyle]
+    }
 
-    static let actionHover: [ElementaryStyle] = [
-        .background(bluePressed)
-    ]
+    static let action = ButtonStyle(
+        base: [
+            .margin(t: 16),
+            .padding(y: 9, x: 14),
+            .minHeight(40),
+            .borderWidth(0),
+            .borderRadius(9),
+            .background(blue),
+            .color(.white),
+            .fontFamily(font),
+            .fontWeight(650),
+            .cursor(.pointer),
+        ],
+        hover: [.background(bluePressed)],
+        disabled: [.background(blue), .opacity(0.55), .cursor(.default)]
+    )
 
     /// A quieter button next to ``action``.
-    static let secondaryAction: [ElementaryStyle] = [
-        .margin(t: 16, l: 8),
-        .padding(y: 9, x: 14),
-        .minHeight(40),
-        .borderWidth(1),
-        .borderColor(squareLine),
-        .borderRadius(9),
-        .background(.white),
-        .color(ink),
-        .fontFamily(font),
-        .fontWeight(650),
-        .cursor(.pointer),
-    ]
-
-    static let secondaryActionHover: [ElementaryStyle] = [
-        .background(squareFill)
-    ]
-
-    static let secondaryActionDisabled: [ElementaryStyle] = [
-        .background(.white),
-        .opacity(0.55),
-        .cursor(.default),
-    ]
-
-    static let actionDisabled: [ElementaryStyle] = [
-        .background(blue),
-        .opacity(0.55),
-        .cursor(.default),
-    ]
+    static let secondaryAction = ButtonStyle(
+        base: [
+            .margin(t: 16, l: 8),
+            .padding(y: 9, x: 14),
+            .minHeight(40),
+            .borderWidth(1),
+            .borderColor(squareLine),
+            .borderRadius(9),
+            .background(.white),
+            .color(ink),
+            .fontFamily(font),
+            .fontWeight(650),
+            .cursor(.pointer),
+        ],
+        hover: [.background(squareFill)],
+        disabled: [.background(.white), .opacity(0.55), .cursor(.default)]
+    )
 
     static let footer: [ElementaryStyle] = [
         .margin(0),
