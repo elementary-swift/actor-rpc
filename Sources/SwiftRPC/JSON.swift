@@ -1,9 +1,3 @@
-import NewCodable
-
-func decodeJSON<T: JSONDecodable>(_ type: T.Type, from bytes: RawSpan) throws(CodingError.Decoding) -> T {
-    try NewJSONDecoder().decode(type, from: bytes)
-}
-
 /// A stand-in until NewCodable can decode an array of differently typed elements one by one.
 enum JSONArray {
     /// The byte range of each element of a top-level JSON array.
@@ -105,13 +99,5 @@ extension UInt8 {
 
     fileprivate var isJSONWhitespace: Bool {
         self == 0x20 || self == 0x0A || self == 0x0D || self == 0x09
-    }
-}
-
-extension [UInt8] {
-    init(copying bytes: Span<UInt8>) {
-        self.init(capacity: bytes.count) { output in
-            for index in bytes.indices { output.append(bytes[index]) }
-        }
     }
 }

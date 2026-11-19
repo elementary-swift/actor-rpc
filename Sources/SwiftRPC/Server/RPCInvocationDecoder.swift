@@ -33,7 +33,7 @@ public struct RPCInvocationDecoder: DistributedTargetInvocationDecoder {
         let range = elements[next]
         next += 1
         do {
-            return try decodeJSON(Argument.self, from: body.span.bytes.extracting(range))
+            return try NewJSONDecoder().decode(Argument.self, from: body.span.bytes.extracting(range))
         } catch {
             throw RPCError(.invalidArgument, "Argument \(next) does not decode: \(error)")
         }
@@ -113,6 +113,14 @@ private func isStubMethod(_ target: Span<UInt8>) -> Bool {
     if position < target.count, target[position] == UInt8(ascii: "0") { position += 1 }
     while position < target.count, target[position].digit != nil { position += 1 }
     return position < target.count && target[position] == UInt8(ascii: "$")
+}
+
+extension [UInt8] {
+    fileprivate init(copying bytes: Span<UInt8>) {
+        self.init(capacity: bytes.count) { output in
+            for index in bytes.indices { output.append(bytes[index]) }
+        }
+    }
 }
 
 extension UInt8 {

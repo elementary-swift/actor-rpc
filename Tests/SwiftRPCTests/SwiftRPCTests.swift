@@ -513,3 +513,11 @@ extension Result {
         if case .failure(let failure) = self { failure } else { nil }
     }
 }
+
+extension [UInt8] {
+    fileprivate init(copying bytes: Span<UInt8>) {
+        self.init(capacity: bytes.count) { output in
+            for index in bytes.indices { output.append(bytes[index]) }
+        }
+    }
+}

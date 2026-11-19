@@ -57,7 +57,7 @@ public final class RPCActorSystem: DistributedActorSystem, Sendable {
         returning: Res.Type
     ) async throws -> Res where Act.ID == ActorID {
         let result = try await send(invocation, to: actor.id, target: target) { reply in
-            try? decodeJSON(Res.self, from: reply.bytes)
+            try? NewJSONDecoder().decode(Res.self, from: reply.bytes)
         }
         guard let result else { throw RPCError.malformedResponse }
         return result

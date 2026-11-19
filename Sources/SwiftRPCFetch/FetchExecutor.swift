@@ -31,8 +31,9 @@ public struct FetchExecutor: RPCHTTPExecutor {
             origin + (request.path ?? ""),
             RequestInit(method: request.method.rawValue, headers: headers, body: JSTypedArray(copying: body))
         )
-        let bytes = Array(try await fetched.bytes())
-        return response(HTTPResponse(status: HTTPResponse.Status(code: try fetched.status)), bytes.span)
+        let head = HTTPResponse(status: HTTPResponse.Status(code: try fetched.status))
+        // JavaScriptKit copies the bytes into a buffer that lives as long as the closure.
+        return try await fetched.bytes().withUnsafeBytes { response(head, $0.span) }
     }
 }
 
@@ -61,19 +62,5 @@ extension JSTypedArray<UInt8> {
     /// JavaScriptKit copies from a pointer, not a span; the pointer doesn't outlive the copy.
     fileprivate convenience init(copying bytes: Span<UInt8>) {
         self.init(unsafelyWrapping: bytes.withUnsafeBufferPointer { JSTypedArray(buffer: $0).jsObject })
-    }
-}
-
-extension [UInt8] {
-    fileprivate init(_ bytes: JSTypedArray<UInt8>) {
-        let count = bytes.length
-        guard count > 0 else {
-            self = []
-            return
-        }
-        self.init(unsafeUninitializedCapacity: count) { buffer, initializedCount in
-            bytes.copyMemory(to: buffer)
-            initializedCount = count
-        }
     }
 }

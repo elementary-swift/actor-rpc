@@ -69,7 +69,7 @@ public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
 extension RPCError {
     /// The error a failed response carries.
     fileprivate init(_ status: HTTPResponse.Status, body: Span<UInt8>) {
-        if let failure = try? decodeJSON(RPCErrorBody.self, from: body.bytes) {
+        if let failure = try? NewJSONDecoder().decode(RPCErrorBody.self, from: body.bytes) {
             self.init(Code(rawValue: failure.code), failure.message)
         } else {
             // Not from an RPCServer, e.g. a proxy's error page.
