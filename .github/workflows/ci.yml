@@ -54,9 +54,13 @@ jobs:
         with:
           toolchain: main-snapshot-2026-11-01
       - run: swift sdk install https://download.swift.org/development/wasm-sdk/swift-DEVELOPMENT-SNAPSHOT-2026-11-01-a/swift-DEVELOPMENT-SNAPSHOT-2026-11-01-a_wasm.artifactbundle.tar.gz --checksum 66293bcf3599e2525376c6be195dbacfb4729df9ef5ab3cd6fd260d787a184e4
+      - uses: phi-ag/setup-binaryen@669f9ccf7c6f8dfeb464af89d27d55a0659b1de7 # v1.0.12
+        with:
+          version: "123"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: Examples/TreasureHunt/package-lock.json
-      - run: npm ci && npm run build
+      - run: swift package resolve && npm ci
+      - run: npm run build
