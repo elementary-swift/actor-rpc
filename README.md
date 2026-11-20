@@ -22,7 +22,7 @@ distributed actor GreeterActor: Greeter {
 }
 ```
 
-[Examples/TreasureHunt](Examples/TreasureHunt) is a browser app calling an actor on AWS Lambda.
+[Examples/TreasureHunt](Examples/TreasureHunt) is a browser app calling an actor on AWS Lambda: [try it](https://treasure-hunt.examples.elementary.codes).
 
 ## Setup
 

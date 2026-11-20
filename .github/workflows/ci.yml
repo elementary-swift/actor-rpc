@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: vapor/swiftly-action@bedb227456c5f495afbef80baebee17a8a02cef4 # v0.2.1
+        with:
+          toolchain: main-snapshot-2026-11-01
+      - name: Install Swift WASM SDK
+        run: swift sdk install https://download.swift.org/development/wasm-sdk/swift-DEVELOPMENT-SNAPSHOT-2026-11-01-a/swift-DEVELOPMENT-SNAPSHOT-2026-11-01-a_wasm.artifactbundle.tar.gz --checksum 66293bcf3599e2525376c6be195dbacfb4729df9ef5ab3cd6fd260d787a184e4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: Examples/TreasureHunt/package-lock.json
+      - name: Lint
+        run: swift format lint --strict -rp .
+      - name: Test
+        run: swift test
+      - name: Test TreasureHunt
+        working-directory: Examples/TreasureHunt
+        run: swift test
+      - name: Build TreasureHunt web app
+        working-directory: Examples/TreasureHunt
+        run: npm ci && npm run build

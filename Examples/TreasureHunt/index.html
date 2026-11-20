@@ -11,10 +11,6 @@
     <meta name="theme-color" content="#2563eb" />
   </head>
   <body>
-    <script>
-      // Empty calls the page's own origin, where Vite forwards /rpc. After deploy, the stack's ApiOrigin.
-      globalThis.__RPC_ORIGIN__ = "";
-    </script>
     <script type="module">
       import "ElementaryFlow";
       import { init } from "virtual:swift-wasm?js&product=WebApp";

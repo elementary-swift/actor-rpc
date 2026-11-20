@@ -25,9 +25,14 @@ If SAM can't find Docker, set `DOCKER_HOST=unix://$HOME/.docker/run/docker.sock`
 
 ## Deploy
 
+Live at https://treasure-hunt.examples.elementary.codes, deployed by [CI](../../.github/workflows/treasure-hunt.yml) on every push to `main`: one SAM stack with the Lambda behind an HTTP API, and the page in S3, both served through CloudFront with `/rpc/*` routed to the API.
+
+To your own account:
+
 ```sh
 npm run build:lambda
-sam deploy --guided --template-file template.yaml
+npm run build
+sam deploy --resolve-s3
 ```
 
-Set `__RPC_ORIGIN__` in `index.html` to the stack's `ApiOrigin`, then `npm run build`.
+Then upload `dist` to the stack's `SiteBucket` and open its `Url`.
