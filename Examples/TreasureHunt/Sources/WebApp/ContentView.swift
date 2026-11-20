@@ -11,7 +11,7 @@ struct ContentView {
     /// Steps to the treasure from each cell dug so far.
     @State var dug: [Cell: Int] = [:]
     @State var revealed: Cell?
-    @State var note = "Burying the treasure."
+    @State var note = "Dig anywhere."
     @State var isBusy = true
 
     var body: some View {
@@ -142,6 +142,7 @@ private struct IntroView {
                     .fontWeight(.bold),
                     .letterSpacing(.em(0.04)),
                     .textDecoration("none"),
+                    .cursor(.pointer),
                     .transform(.rotate(-2)),
                     .boxShadow(.hard(4, .pink)),
                     .quickTransition
@@ -163,7 +164,7 @@ private struct IntroView {
             Paragraph {
                 "This page is Embedded Swift compiled to WebAssembly. Its backend API is a plain Swift "
                 Code(text: "distributed protocol")
-                ": "
+                " and "
                 Link(title: "swift-rpc", href: "https://github.com/elementary-swift/swift-rpc")
                 " turns "
                 Code(text: "try await hunt.dig(cell, in: game)")
@@ -246,8 +247,15 @@ private struct Square {
             )
             .style(when: .hover, .transform(.translate(-2, -2)), .boxShadow(.hard(4)), .background(.lime))
             .style(when: .active, .transform(.translate(2, 2)), .boxShadow(.hard(0)), .pressTransition)
-            // Dug squares and the board between turns: undo the hover lift.
-            .style(when: .disabled, .transform("none"), .boxShadow(.hard(2)), .cursor(.default), .disableTransition)
+            // Dug squares and the board between turns: undo the hover lift and the lime, which sticks after a tap on touch screens.
+            .style(
+                when: .disabled,
+                .transform("none"),
+                .boxShadow(.hard(2)),
+                .background(fill),
+                .cursor(.default),
+                .disableTransition
+            )
     }
 
     private var fill: CSSColor {
@@ -289,7 +297,8 @@ private struct Link {
                 .color(.ink),
                 .fontWeight(.bold),
                 .textDecoration("underline 3px \(CSSColor.pink.rawValue)"),
-                .whiteSpace("nowrap")
+                .whiteSpace("nowrap"),
+                .cursor(.pointer)
             )
     }
 }

@@ -20,7 +20,16 @@
     <script type="module">
       import "ElementaryFlow";
       import { init } from "virtual:swift-wasm?js&product=WebApp";
-      await init();
+      // Fetch the fonts alongside the wasm instead of waiting for the first render to ask for them.
+      const fonts = [
+        "1em 'Archivo Black'",
+        "500 1em 'Space Grotesk'",
+        "700 1em 'Space Grotesk'",
+        "500 1em 'JetBrains Mono'",
+        "700 1em 'JetBrains Mono'",
+        "800 1em 'JetBrains Mono'",
+      ].map((font) => document.fonts.load(font));
+      await Promise.all([init(), ...fonts]);
     </script>
   </body>
 </html>
