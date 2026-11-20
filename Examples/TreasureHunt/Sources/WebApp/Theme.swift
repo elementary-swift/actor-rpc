@@ -1,150 +1,54 @@
 import ElementaryFlow
 
-enum Theme {
-    static let ink: CSSColor = "#182230"
-    static let muted: CSSColor = "#667085"
-    static let canvas: CSSColor = "#f7f8fa"
-    static let blue: CSSColor = "#2563eb"
-    static let bluePressed: CSSColor = "#1d4ed8"
-    static let line: CSSColor = "#e4e7ec"
-    static let squareFill: CSSColor = "#f8fafc"
-    static let squareLine: CSSColor = "#d0d5dd"
-    static let squareHoverLine: CSSColor = "#84adff"
-    static let gold: CSSColor = "#facc15"
+extension CSSColor {
+    static let ink: Self = "#111111"
+    static let paper: Self = "#fffdf6"
+    static let canvas: Self = "#f3ead3"
+    static let lime: Self = "#c6ff3d"
+    static let pink: Self = "#ff5fa2"
+    static let gold: Self = "#ffd60a"
 
-    static let font: CSSFontFamily = "Inter, ui-sans-serif, system-ui, sans-serif"
+    /// The canvas with a faint 28px grid over it.
+    static let graphPaper: Self = """
+        linear-gradient(rgba(17, 17, 17, 0.07) 1px, transparent 1px) 0 0 / 28px 28px, \
+        linear-gradient(90deg, rgba(17, 17, 17, 0.07) 1px, transparent 1px) 0 0 / 28px 28px, \
+        \(canvas.rawValue)
+        """
+}
 
-    static let screen: [ElementaryStyle] = [
-        .position(.fixed),
-        .inset(0),
-        .overflow(.auto),
-        .padding(t: 72, r: 16, b: 40, l: 16),
-        .background(canvas),
-        .color(ink),
-        .fontFamily(font),
-    ]
+extension CSSFontFamily {
+    static let display: Self = "'Archivo Black', Impact, ui-sans-serif, sans-serif"
+    static let body: Self = "'Space Grotesk', ui-sans-serif, system-ui, sans-serif"
+    static let mono: Self = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
+    /// For glyphs like ★, which the mono font draws tiny and low.
+    static let symbol: Self = "ui-sans-serif, system-ui, sans-serif"
+}
 
-    static let page: [ElementaryStyle] = [
-        .width(.percent(100)),
-        .margin(x: .auto),
-    ]
+extension CSSLength {
+    /// Fits ten squares and their gaps on a phone, capped at 38px.
+    static let square: Self = "min(38px, calc((100vw - 32px - 48px - 27px) / 10))"
+}
 
-    static let kicker: [ElementaryStyle] = [
-        .margin(b: 8),
-        .color(blue),
-        .fontSize(.rem(0.75)),
-        .fontWeight(.bold),
-        .letterSpacing(.em(0.08)),
-        .textTransform("uppercase"),
-    ]
-
-    static let title: [ElementaryStyle] = [
-        .margin(b: 12),
-        .maxWidth(620),
-        .fontSize(.rem(3.25)),
-        .fontWeight(.bold),
-        .lineHeight("1.02"),
-        .letterSpacing(.em(-0.045)),
-    ]
-
-    static let lede: [ElementaryStyle] = [
-        .margin(0),
-        .color(muted),
-        .fontSize(.rem(1.1)),
-    ]
-
-    static let card: [ElementaryStyle] = [
-        .padding(24),
-        .background(.white),
-        .borderWidth(1),
-        .borderColor(line),
-        .borderRadius(16),
-        .boxShadow(.shadow(y: 1, blur: 2, color: .rgba(16, 24, 40, 0.05))),
-    ]
-
-    static let status: [ElementaryStyle] = [
-        .margin(b: 20),
-        .fontSize(.rem(1.2)),
-        .fontWeight(.semiBold),
-        .letterSpacing(.em(-0.015)),
-    ]
-
-    static let square: [ElementaryStyle] = [
-        .width(32),
-        .height(32),
-        .padding(0),
-        .borderWidth(1),
-        .borderColor(squareLine),
-        .borderRadius(6),
-        .color(ink),
-        .fontFamily(font),
-        .fontSize(.rem(0.8)),
-        .fontWeight(650),
-        .textAlign(.center),
-        .cursor(.pointer),
-    ]
-
-    static let squareHover: [ElementaryStyle] = [
-        .borderColor(squareHoverLine)
-    ]
-
-    static let squareDisabled: [ElementaryStyle] = [
-        .borderColor(squareLine),
-        .cursor(.default),
-    ]
-
-    /// A button's look at rest, on hover and when disabled.
-    struct ButtonStyle {
-        var base: [ElementaryStyle]
-        var hover: [ElementaryStyle]
-        var disabled: [ElementaryStyle]
+extension CSSBoxShadow {
+    /// A solid, unblurred shadow offset down and to the right.
+    static func hard(_ offset: Int, _ color: CSSColor = .ink) -> Self {
+        .shadow(x: .px(offset), y: .px(offset), blur: 0, color: color)
     }
+}
 
-    static let action = ButtonStyle(
-        base: [
-            .margin(t: 16),
-            .padding(y: 9, x: 14),
-            .minHeight(40),
-            .borderWidth(0),
-            .borderRadius(9),
-            .background(blue),
-            .color(.white),
-            .fontFamily(font),
-            .fontWeight(650),
-            .cursor(.pointer),
-        ],
-        hover: [.background(bluePressed)],
-        disabled: [.background(blue), .opacity(0.55), .cursor(.default)]
+extension ElementaryStyle {
+    /// Snappy feedback for hover.
+    static let quickTransition = transition(
+        "transform 90ms ease-out, box-shadow 90ms ease-out, opacity 120ms ease-out, background 90ms ease-out"
     )
-
-    /// A quieter button next to ``action``.
-    static let secondaryAction = ButtonStyle(
-        base: [
-            .margin(t: 16, l: 8),
-            .padding(y: 9, x: 14),
-            .minHeight(40),
-            .borderWidth(1),
-            .borderColor(squareLine),
-            .borderRadius(9),
-            .background(.white),
-            .color(ink),
-            .fontFamily(font),
-            .fontWeight(650),
-            .cursor(.pointer),
-        ],
-        hover: [.background(squareFill)],
-        disabled: [.background(.white), .opacity(0.55), .cursor(.default)]
+    /// Going down on press is instant.
+    static let pressTransition = transition("transform 40ms ease-out, box-shadow 40ms ease-out")
+    /// Coming back up after a press lingers briefly, so the click registers.
+    static let releaseTransition = transition(
+        "transform 120ms ease-out 70ms, box-shadow 120ms ease-out 70ms, opacity 120ms ease-out, background 90ms ease-out"
     )
-
-    static let footer: [ElementaryStyle] = [
-        .margin(0),
-        .padding(t: 24),
-        .color(muted),
-        .fontSize(.rem(0.82)),
-        .lineHeight("1.55"),
-    ]
-
-    static let link: [ElementaryStyle] = [
-        .color(blue)
-    ]
+    /// Going disabled waits a beat before fading, so a quick round trip to the server doesn't make controls blink.
+    static let disableTransition = transition(
+        "opacity 180ms ease-out 350ms, transform 120ms ease-out 70ms, box-shadow 120ms ease-out 70ms"
+    )
 }
