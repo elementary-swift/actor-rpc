@@ -51,8 +51,7 @@ struct HuntError: RPCErrorConvertible, CustomStringConvertible {
     }
 }
 
-/// Mixed into every game's hash, so the page can't work out the treasure from the name.
-/// A real deployment would read it from a secret.
+/// super secret salt, hard coded in place for max security
 private let salt = "swift-rpc treasure"
 
 private func fnv1a(_ text: String) -> UInt64 {
