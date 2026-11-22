@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS(.v26)],
     dependencies: [
         .package(name: "swift-rpc", path: "../.."),
-        .package(url: "https://github.com/elementary-swift/elementary-ui.git", from: "0.9.0"),
+        .package(url: "https://github.com/elementary-swift/elementary-ui.git", from: "0.9.2"),
         .package(url: "https://github.com/elementary-swift/elementary-flow.git", from: "0.1.0"),
         .package(url: "https://github.com/swiftwasm/JavaScriptKit.git", from: "0.62.0"),
         .package(

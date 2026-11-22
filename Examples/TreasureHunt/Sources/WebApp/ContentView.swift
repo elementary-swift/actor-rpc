@@ -201,16 +201,21 @@ private struct MapView {
                 FlexRow(gap: 3) {
                     for column in 0..<size {
                         let cell = Cell(row: row, column: column)
-                        Square(
-                            steps: dug[cell],
-                            isTreasure: dug[cell] == 0 || revealed == cell,
-                            enabled: canDig && dug[cell] == nil,
-                            onDig: { onDig(cell) }
-                        )
+                        if let reaction = reaction(at: cell) {
+                            TreasureSquare(reaction: reaction)
+                        } else {
+                            Square(steps: dug[cell], enabled: canDig && dug[cell] == nil) { onDig(cell) }
+                        }
                     }
                 }
             }
         }
+    }
+
+    private func reaction(at cell: Cell) -> Reaction? {
+        if dug[cell] == 0 { return .found }
+        if revealed == cell { return .gaveUp }
+        return nil
     }
 }
 
@@ -218,7 +223,7 @@ private struct MapView {
 private struct Square {
     /// Steps to the treasure, once dug.
     var steps: Int?
-    var isTreasure: Bool
+    var isTreasure = false
     var enabled: Bool
     var onDig: () -> Void
 
@@ -263,6 +268,96 @@ private struct Square {
         guard let steps else { return .paper }
         // Red when close, blue when far.
         return "hsl(\(min(steps - 1, 17) * 13) 80% 64%)"
+    }
+}
+
+/// The treasure's square, which reacts once when it shows up.
+///
+/// Its own view so only this square carries the animated transform, which would
+/// otherwise override the hover and press styles of every other square.
+@View
+private struct TreasureSquare {
+    var reaction: Reaction
+    @State var hasAppeared = false
+
+    var body: some View {
+        Square(isTreasure: true, enabled: false) {}
+            .phaseAnimator(reaction.poses, trigger: hasAppeared) { square, pose in
+                square
+                    .offset(y: pose.lift)
+                    .rotationEffect(.degrees(pose.tilt))
+                    .scaleEffect(x: pose.scaleX, y: pose.scaleY)
+            } animation: { reaction.animation(into: $0) }
+            .onAppear { hasAppeared = true }
+    }
+}
+
+private enum Reaction {
+    /// Squash, jump out at the player, flip like a coin, land.
+    case found
+    /// Sink a little, sway, sigh back into place.
+    case gaveUp
+
+    var poses: [Pose] {
+        switch self {
+        case .found: [.rest, .crouch, .hop, .flip, .flipBack]
+        case .gaveUp: [.rest, .droop, .swayLeft, .swayRight]
+        }
+    }
+
+    func animation(into pose: Pose) -> Animation {
+        switch (self, pose) {
+        case (.found, .rest): .bouncy(duration: 0.6, extraBounce: 0.25)
+        case (.gaveUp, .rest): .smooth(duration: 0.55)
+        case (_, .crouch): .easeOut(duration: 0.12)
+        case (_, .hop): .bouncy(duration: 0.45, extraBounce: 0.2)
+        case (_, .flip), (_, .flipBack): .easeInOut(duration: 0.2)
+        case (_, .droop): .easeInOut(duration: 0.3)
+        case (_, .swayLeft), (_, .swayRight): .easeInOut(duration: 0.38)
+        }
+    }
+}
+
+private enum Pose {
+    case rest
+    case crouch, hop, flip, flipBack
+    case droop, swayLeft, swayRight
+
+    /// Points, applied inside the scale, so the rise grows with the tile.
+    var lift: Double {
+        switch self {
+        case .rest: 0
+        case .crouch: 2
+        case .droop, .swayLeft, .swayRight: 3
+        default: -8
+        }
+    }
+
+    var tilt: Double {
+        switch self {
+        case .swayLeft: -7
+        case .swayRight: 4
+        default: 0
+        }
+    }
+
+    var scaleX: Double {
+        switch self {
+        case .rest: 1
+        case .crouch: 1.15
+        case .flip: -1.7
+        case .droop, .swayLeft, .swayRight: 0.97
+        default: 1.7
+        }
+    }
+
+    var scaleY: Double {
+        switch self {
+        case .rest: 1
+        case .crouch: 0.8
+        case .droop, .swayLeft, .swayRight: 0.95
+        default: 1.7
+        }
     }
 }
 
