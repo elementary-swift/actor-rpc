@@ -1,51 +1,67 @@
-# SwiftRPC
+# SwiftRPC - Protocols as APIs
 
-Call a Swift `distributed actor` on your server from Swift in the browser. One protocol is shared by both sides and the compiler checks every call against it: no codegen, no schema, no hand-written requests.
+Client-server communication built on Swift's [distributed actors](https://developer.apple.com/documentation/distributed). Write a protocol, implement it on the server, call it from the client. No schema, no codegen.
 
-A proof of concept: everything here will change.
+Works with Embedded Swift in the browser!
+
+> [!WARNING]
+> **Early proof of concept. Not ready for use.**
+> No releases yet. The API and the wire format will change without notice. Requires a Swift `main` snapshot and the experimental `NewCodable` branch of swift-foundation.
+
+## Live demo
+
+[**>> TreasureHunt <<**](https://treasure-hunt.examples.elementary.codes) is a browser game that calls its server on AWS Lambda. Source in [Examples/TreasureHunt](Examples/TreasureHunt).
+
+## What it looks like
+
+**Shared:** the contract.
 
 ```swift
-// Shared
 @Resolvable
-public protocol Greeter: RPCService {
-    distributed func greet(name: String) async throws -> String
+public protocol DeepThought: RPCService {
+    distributed func answer(to question: String) async throws -> Int
 }
 
-// Browser
-let transport = RPCHTTPTransport(executor: FetchExecutor(), options: .init(basePath: "/rpc"))
-let greeter = RPCClient(transport: transport).resolve($Greeter.self)
-let greeting = try await greeter.greet(name: "Ada")
-
-// Server
-distributed actor GreeterActor: Greeter {
-    distributed func greet(name: String) -> String { "Hello, \(name)!" }
+extension DeepThought {
+    public static var serviceName: String { "deep-thought" }
 }
 ```
 
-[Examples/TreasureHunt](Examples/TreasureHunt) is a browser app calling an actor on AWS Lambda: [try it](https://treasure-hunt.examples.elementary.codes).
+**Server:** implement it.
+
+```swift
+distributed actor DeepThoughtActor: DeepThought {
+    distributed func answer(to question: String) async throws -> Int {
+        try await Task.sleep(for: .seconds(7_500_000 * 365 * 24 * 60 * 60))
+        return 42
+    }
+}
+```
+
+**Browser:** call it.
+
+```swift
+let deepThought = RPCClient(transport: transport).resolve($DeepThought.self)
+
+let answer = try await deepThought.answer(to: "Life, the Universe and Everything") // 42
+```
 
 ## Setup
 
-Name the service, next to the protocol:
+The browser sends calls with `fetch`, from `SwiftRPCFetch`:
 
 ```swift
-extension Greeter {
-    public static var serviceName: String { "greeter" }
-}
+let transport = RPCHTTPTransport(executor: FetchExecutor(), options: .init(basePath: "/rpc"))
 ```
 
-Serve it from any HTTP server:
+The server answers them from your HTTP handler:
 
 ```swift
 var server = RPCServer(basePath: "/rpc")
-server.serve(perCall: GreeterActor.init)
+server.serve(perCall: DeepThoughtActor.init)
 
-// In the HTTP handler for POST /rpc/*:
-let response = await server.respond(to: request, body: body) { head, body in
-    // Build your framework's response from `head` and `body`.
+// In your handler for POST /rpc/*:
+let response = await server.respond(to: request, body: body) { response, body in
+    // Build your framework's response from `response` and `body`.
 }
 ```
-
-`$Greeter` is the stub that `@Resolvable` generates for the protocol. `FetchExecutor` is in `SwiftRPCFetch`; outside the browser, give the transport your own `RPCHTTPExecutor`.
-
-Requires a Swift main snapshot and the `experimental/new-codable` branch of swift-foundation.

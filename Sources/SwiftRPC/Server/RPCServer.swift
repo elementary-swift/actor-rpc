@@ -10,8 +10,8 @@ import NewCodable
 /// server.serve(perCall: GreeterActor.init)
 ///
 /// // In the HTTP handler for POST /rpc/*:
-/// let response = await server.respond(to: request, body: body) { head, body in
-///     // Build the host's response type from `head` and `body`.
+/// let response = await server.respond(to: request, body: body) { response, body in
+///     // Build the host's response type from `response` and `body`.
 /// }
 /// ```
 ///
