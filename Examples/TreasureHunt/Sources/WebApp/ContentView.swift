@@ -287,7 +287,9 @@ private struct TreasureSquare {
                     .offset(y: pose.lift)
                     .rotationEffect(.degrees(pose.tilt))
                     .scaleEffect(x: pose.scaleX, y: pose.scaleY)
-            } animation: { reaction.animation(into: $0) }
+            } animation: {
+                reaction.animation(into: $0)
+            }
             .onAppear { hasAppeared = true }
     }
 }
