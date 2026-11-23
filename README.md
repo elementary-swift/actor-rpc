@@ -1,6 +1,6 @@
-# ActorRPC - Protocols as APIs
+# ActorRPC - Distributed actors over HTTP
 
-Client-server communication over HTTP, built on Swift's [distributed actors](https://developer.apple.com/documentation/distributed). Write a protocol, implement it on the server, call it from the client. No schema, no codegen.
+Define your API as a Swift protocol, implement it as a [distributed actor](https://developer.apple.com/documentation/distributed) on the server, and call it from any client. No schema, no codegen.
 
 Works with Embedded Swift in the browser!
 
