@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "swift-rpc",
+    name: "actor-rpc",
     platforms: [.macOS(.v26)],
     products: [
-        .library(name: "SwiftRPC", targets: ["SwiftRPC"]),
-        .library(name: "SwiftRPCFetch", targets: ["SwiftRPCFetch"]),
+        .library(name: "ActorRPC", targets: ["ActorRPC"]),
+        .library(name: "ActorRPCFetch", targets: ["ActorRPCFetch"]),
     ],
     dependencies: [
         .package(
@@ -18,7 +18,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "SwiftRPC",
+            name: "ActorRPC",
             dependencies: [
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "NewCodable", package: "swift-foundation"),
@@ -31,9 +31,9 @@ let package = Package(
             ]
         ),
         .target(
-            name: "SwiftRPCFetch",
+            name: "ActorRPCFetch",
             dependencies: [
-                "SwiftRPC",
+                "ActorRPC",
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "JavaScriptKit", package: "JavaScriptKit"),
             ],
@@ -49,8 +49,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "SwiftRPCTests",
-            dependencies: ["SwiftRPC"]
+            name: "ActorRPCTests",
+            dependencies: ["ActorRPC"]
         ),
     ]
 )

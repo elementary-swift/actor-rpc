@@ -5,7 +5,7 @@ let package = Package(
     name: "elementary-treasure-hunt",
     platforms: [.macOS(.v26)],
     dependencies: [
-        .package(name: "swift-rpc", path: "../.."),
+        .package(name: "actor-rpc", path: "../.."),
         .package(url: "https://github.com/elementary-swift/elementary-ui.git", from: "0.9.2"),
         .package(url: "https://github.com/elementary-swift/elementary-flow.git", from: "0.1.0"),
         .package(url: "https://github.com/swiftwasm/JavaScriptKit.git", from: "0.62.0"),
@@ -21,7 +21,7 @@ let package = Package(
         .target(
             name: "Shared",
             dependencies: [
-                .product(name: "SwiftRPC", package: "swift-rpc"),
+                .product(name: "ActorRPC", package: "actor-rpc"),
                 .product(name: "NewCodable", package: "swift-foundation"),
             ]
         ),
@@ -29,8 +29,8 @@ let package = Package(
             name: "WebApp",
             dependencies: [
                 "Shared",
-                .product(name: "SwiftRPC", package: "swift-rpc"),
-                .product(name: "SwiftRPCFetch", package: "swift-rpc"),
+                .product(name: "ActorRPC", package: "actor-rpc"),
+                .product(name: "ActorRPCFetch", package: "actor-rpc"),
                 .product(name: "ElementaryUI", package: "elementary-ui"),
                 .product(name: "ElementaryFlow", package: "elementary-flow"),
                 .product(name: "JavaScriptKit", package: "JavaScriptKit"),
@@ -48,7 +48,7 @@ let package = Package(
             name: "Lambda",
             dependencies: [
                 "Shared",
-                .product(name: "SwiftRPC", package: "swift-rpc"),
+                .product(name: "ActorRPC", package: "actor-rpc"),
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "AWSLambdaRuntime", package: "swift-aws-lambda-runtime"),
                 .product(name: "AWSLambdaEvents", package: "swift-aws-lambda-events"),
@@ -59,7 +59,7 @@ let package = Package(
             dependencies: [
                 "Lambda",
                 "Shared",
-                .product(name: "SwiftRPC", package: "swift-rpc"),
+                .product(name: "ActorRPC", package: "actor-rpc"),
             ]
         ),
     ]

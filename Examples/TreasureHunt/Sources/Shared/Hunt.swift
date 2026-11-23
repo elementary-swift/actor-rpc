@@ -1,6 +1,6 @@
+import ActorRPC
 import Distributed
 import NewCodable
-import SwiftRPC
 
 /// One hunt.
 @JSONCodable

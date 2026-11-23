@@ -1,7 +1,7 @@
 import AWSLambdaEvents
 import AWSLambdaRuntime
+import ActorRPC
 import HTTPTypes
-import SwiftRPC
 
 @main
 struct TreasureHuntLambda {

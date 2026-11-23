@@ -29,7 +29,7 @@ public struct RPCServer: Sendable {
     private let onError: @Sendable (any Error) -> Void
 
     /// - Parameters:
-    ///   - basePath: Where the host mounts SwiftRPC, e.g. `/rpc`. No trailing slash.
+    ///   - basePath: Where the host mounts ActorRPC, e.g. `/rpc`. No trailing slash.
     ///   - onError: Sees every error whose details a call hides from its caller.
     public init(basePath: String = "", onError: @escaping @Sendable (any Error) -> Void = { _ in }) {
         self.basePath = basePath

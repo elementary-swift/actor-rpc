@@ -1,6 +1,6 @@
+public import ActorRPC
 public import HTTPTypes
 import JavaScriptKit
-public import SwiftRPC
 
 /// Sends requests with the browser's `fetch`.
 ///

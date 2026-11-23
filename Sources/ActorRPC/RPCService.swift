@@ -1,6 +1,6 @@
 public import Distributed
 
-/// A distributed actor protocol that SwiftRPC serves and calls under one name.
+/// A distributed actor protocol that ActorRPC serves and calls under one name.
 ///
 /// ```swift
 /// @Resolvable

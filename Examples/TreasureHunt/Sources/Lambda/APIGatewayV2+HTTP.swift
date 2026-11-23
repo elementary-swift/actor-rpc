@@ -31,7 +31,7 @@ extension APIGatewayV2Response {
         self.init(
             statusCode: response.status,
             headers: Dictionary(response.headerFields.map { ($0.name.canonicalName, $0.value) }) { $1 },
-            // SwiftRPC answers with JSON, which is UTF-8.
+            // ActorRPC answers with JSON, which is UTF-8.
             body: String(copying: unsafe UTF8Span(unchecked: body))
         )
     }

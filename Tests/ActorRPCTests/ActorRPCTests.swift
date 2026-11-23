@@ -4,7 +4,7 @@ import NewCodable
 import Synchronization
 import Testing
 
-@testable import SwiftRPC
+@testable import ActorRPC
 
 private enum CallNote {
     @TaskLocal static var current: String?
@@ -76,17 +76,17 @@ extension RPCError.Code {
     fileprivate static let outOfInk = Self(rawValue: "out_of_ink")
 }
 
-/// Its stub, `$SwiftRPCTests`, repeats the words of the module's name, which mangles differently.
+/// Its stub, `$ActorRPCTests`, repeats the words of the module's name, which mangles differently.
 @Resolvable
-protocol SwiftRPCTests: RPCService {
+protocol ActorRPCTests: RPCService {
     distributed func ping() async throws -> String
 }
 
-extension SwiftRPCTests {
+extension ActorRPCTests {
     static var serviceName: String { "tests" }
 }
 
-distributed actor PingActor: SwiftRPCTests {
+distributed actor PingActor: ActorRPCTests {
     distributed func ping() -> String { "pong" }
 }
 
@@ -481,7 +481,7 @@ func respondAcceptsJSONContentTypes(contentType: String) async throws {
 @Test func stubThatRepeatsTheModulesNameIsServed() async throws {
     var server = RPCServer()
     server.serve(perCall: PingActor.init)
-    #expect(try await RPCClient(server: server).resolve($SwiftRPCTests.self).ping() == "pong")
+    #expect(try await RPCClient(server: server).resolve($ActorRPCTests.self).ping() == "pong")
 }
 
 @Test func methodOfAnotherActorTypeDoesNotRun() async throws {

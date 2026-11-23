@@ -21,7 +21,7 @@ public protocol RPCHTTPExecutor: Sendable {
 /// unreachable, is rethrown as is.
 public struct RPCHTTPTransport<Executor: RPCHTTPExecutor>: RPCTransport {
     public struct Options: Sendable {
-        /// Where the server mounts SwiftRPC, e.g. `/rpc`. No trailing slash.
+        /// Where the server mounts ActorRPC, e.g. `/rpc`. No trailing slash.
         public var basePath: String
         /// Runs before every call to set its header fields, e.g. the current `authorization` token.
         public var headerFields: @Sendable (inout HTTPFields) async throws -> Void
