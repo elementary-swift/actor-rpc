@@ -1,6 +1,6 @@
+import ActorRPC
 import Distributed
 import Shared
-import SwiftRPC
 
 /// The hunt. The actor stores nothing: a game's treasure follows from its name.
 distributed actor TreasureHuntActor: TreasureHunt {
@@ -52,7 +52,7 @@ struct HuntError: RPCErrorConvertible, CustomStringConvertible {
 }
 
 /// super secret salt, hard coded in place for max security
-private let salt = "swift-rpc treasure"
+private let salt = "here be distributed dragons"
 
 private func fnv1a(_ text: String) -> UInt64 {
     var hash: UInt64 = 0xcbf2_9ce4_8422_2325

@@ -131,7 +131,7 @@ struct ContentView {
 private struct IntroView {
     var body: some View {
         FlexColumn(align: .start) {
-            a(.href("https://github.com/elementary-swift/swift-rpc")) { "★ swift-rpc · proof of concept ↗" }
+            a(.href("https://github.com/elementary-swift/actor-rpc")) { "★ actor-rpc · proof of concept ↗" }
                 .style(
                     .display(.init(rawValue: "inline-block")),
                     .padding(y: 6, x: 12),
@@ -165,7 +165,7 @@ private struct IntroView {
                 "This page is Embedded Swift compiled to WebAssembly. Its backend API is a plain Swift "
                 Code(text: "distributed protocol")
                 " and "
-                Link(title: "swift-rpc", href: "https://github.com/elementary-swift/swift-rpc")
+                Link(title: "actor-rpc", href: "https://github.com/elementary-swift/actor-rpc")
                 " turns "
                 Code(text: "try await hunt.dig(cell, in: game)")
                 " into a JSON call to a Swift actor on AWS Lambda."
@@ -370,13 +370,13 @@ private struct FooterView {
             "UI in "
             Link(title: "ElementaryUI", href: "https://elementary.codes")
             " compiled to Embedded Swift WebAssembly, calling over "
-            Link(title: "swift-rpc", href: "https://github.com/elementary-swift/swift-rpc")
+            Link(title: "actor-rpc", href: "https://github.com/elementary-swift/actor-rpc")
             " into a Swift distributed actor on "
             Link(title: "AWS Lambda", href: "https://github.com/awslabs/swift-aws-lambda-runtime")
             ". "
             Link(
                 title: "Source of this game ↗",
-                href: "https://github.com/elementary-swift/swift-rpc/tree/main/Examples/TreasureHunt"
+                href: "https://github.com/elementary-swift/actor-rpc/tree/main/Examples/TreasureHunt"
             )
         }
         .style(.margin(0), .fontFamily(.mono), .fontSize(.rem(0.78)), .lineHeight("1.6"))

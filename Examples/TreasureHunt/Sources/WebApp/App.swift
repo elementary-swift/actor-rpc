@@ -1,9 +1,9 @@
+import ActorRPC
+import ActorRPCFetch
 import ElementaryUI
 import JavaScriptEventLoop
 import JavaScriptKit
 import Shared
-import SwiftRPC
-import SwiftRPCFetch
 
 @main
 struct App {

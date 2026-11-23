@@ -1,6 +1,6 @@
+import ActorRPC
 import Distributed
 import Shared
-import SwiftRPC
 import Testing
 
 @testable import Lambda

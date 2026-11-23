@@ -1,6 +1,6 @@
-# SwiftRPC - Protocols as APIs
+# ActorRPC - Protocols as APIs
 
-Client-server communication built on Swift's [distributed actors](https://developer.apple.com/documentation/distributed). Write a protocol, implement it on the server, call it from the client. No schema, no codegen.
+Client-server communication over HTTP, built on Swift's [distributed actors](https://developer.apple.com/documentation/distributed). Write a protocol, implement it on the server, call it from the client. No schema, no codegen.
 
 Works with Embedded Swift in the browser!
 
@@ -48,7 +48,7 @@ let answer = try await deepThought.answer(to: "Life, the Universe and Everything
 
 ## Setup
 
-The browser sends calls with `fetch`, from `SwiftRPCFetch`:
+The browser sends calls with `fetch`, from `ActorRPCFetch`:
 
 ```swift
 let transport = RPCHTTPTransport(executor: FetchExecutor(), options: .init(basePath: "/rpc"))
